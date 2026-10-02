@@ -77,6 +77,9 @@ export interface AgentCreated {
   isExternal?: boolean;
   palette?: number;
   hueShift?: number;
+  providerId?: string;
+  model?: string;
+  agentName?: string;
 }
 
 export interface AgentClosed {
@@ -101,6 +104,9 @@ export interface AgentSeatMeta {
   palette?: number;
   hueShift?: number;
   seatId?: string;
+  providerId?: string;
+  model?: string;
+  agentName?: string;
 }
 
 export interface AgentStatus {

@@ -182,6 +182,9 @@ function registerWebSocketRoute(app: FastifyInstance, options: HttpServerOptions
         hooksOnly: agent.hooksOnly || undefined,
         palette: agent.palette,
         hueShift: agent.hueShift,
+        agentName: agent.agentName,
+        providerId: agent.providerId ?? 'claude',
+        model: agent.model,
       });
     };
 

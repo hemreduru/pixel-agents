@@ -234,6 +234,7 @@ export function useExtensionMessages(
         for (const p of pendingAgents) {
           os.addAgent(p.id, p.palette, p.hueShift, p.seatId, true, p.folderName);
           if (p.isHeadless) os.setHeadless(p.id, true);
+          if (p.info) os.setAgentInfo(p.id, p.info);
         }
         pendingAgents = [];
         layoutReadyRef.current = true;
@@ -288,6 +289,11 @@ export function useExtensionMessages(
           if (isHeadlessAgent(msg.isExternal as boolean | undefined)) {
             os.setHeadless(id, true);
           }
+          os.setAgentInfo(id, {
+            providerId: msg.providerId as string | undefined,
+            model: msg.model as string | undefined,
+            agentName: msg.agentName as string | undefined,
+          });
         }
         saveAgentSeats(os);
       } else if (msg.type === 'agentClosed') {

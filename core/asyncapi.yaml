@@ -190,6 +190,15 @@ components:
         hueShift:
           type: integer
           description: Server-assigned hue shift in degrees (0-360).
+        providerId:
+          type: string
+          description: Integration the agent comes from (`claude`, `antigravity`, or another acpx agent id).
+        model:
+          type: string
+          description: Model the agent runs on, when its source states one.
+        agentName:
+          type: string
+          description: Display name for non-team agents (e.g. `agy-pro · gemini-3.1-pro-high`).
 
     AgentClosed:
       description: An agent has been removed from the office.
@@ -1080,6 +1089,15 @@ components:
           type: integer
         seatId:
           type: string
+        providerId:
+          type: string
+          description: Integration the agent comes from (`claude`, `antigravity`, or another acpx agent id).
+        model:
+          type: string
+          description: Model the agent runs on, when its source states one.
+        agentName:
+          type: string
+          description: Display name for non-team agents (e.g. `agy-pro · gemini-3.1-pro-high`).
 
     SeatAssignment:
       description: |
