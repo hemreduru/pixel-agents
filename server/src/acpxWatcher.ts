@@ -101,6 +101,7 @@ export function parseAcpxRecord(raw: unknown): AcpxSession | null {
 }
 
 function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false; // kill(0, 0) signals the whole process group
   try {
     process.kill(pid, 0);
     return true;
@@ -131,13 +132,14 @@ export class AcpxWatcher {
   }
 
   start(): void {
-    if (!fs.existsSync(this.dir)) return;
     console.log(`[Pixel Agents] Watching ACP sessions: ${this.dir}`);
-    try {
-      this.fsWatcher = fs.watch(this.dir, () => this.scan());
-      this.fsWatcher.on('error', () => {});
-    } catch {
-      /* the poll below covers it */
+    if (fs.existsSync(this.dir)) {
+      try {
+        this.fsWatcher = fs.watch(this.dir, () => this.scan());
+        this.fsWatcher.on('error', () => {});
+      } catch {
+        /* the poll below covers it */
+      }
     }
     this.timer = setInterval(() => this.scan(), ACPX_SCAN_INTERVAL_MS);
     this.scan();
@@ -208,6 +210,14 @@ export class AcpxWatcher {
     const agent = this.store.get(t.id);
     if (!agent) return;
 
+    const current = new Set(s.tools.map((tool) => tool.id));
+    for (const toolId of [...agent.activeToolIds]) {
+      if (!current.has(toolId)) {
+        agent.activeToolIds.delete(toolId);
+        this.broadcastToolDone(t.id, toolId);
+      }
+    }
+
     for (const tool of s.tools) {
       if (!t.seenTools.has(tool.id)) {
         t.seenTools.add(tool.id);
@@ -224,19 +234,24 @@ export class AcpxWatcher {
         });
         this.store.broadcast({ type: 'agentStatus', id: t.id, status: 'active' });
       }
-      if (tool.done && agent.activeToolIds.delete(tool.id)) {
-        const id = t.id;
-        setTimeout(
-          () => this.store.broadcast({ type: 'agentToolDone', id, toolId: tool.id }),
-          TOOL_DONE_DELAY_MS,
-        );
-      }
+      if (tool.done && agent.activeToolIds.delete(tool.id)) this.broadcastToolDone(t.id, tool.id);
     }
 
-    if (!agent.isWaiting && Date.now() - s.updatedAtMs > ACPX_IDLE_THRESHOLD_MS) {
+    if (
+      !agent.isWaiting &&
+      agent.activeToolIds.size === 0 &&
+      Date.now() - s.updatedAtMs > ACPX_IDLE_THRESHOLD_MS
+    ) {
       agent.isWaiting = true;
       this.store.broadcast({ type: 'agentStatus', id: t.id, status: 'waiting' });
     }
+  }
+
+  private broadcastToolDone(id: number, toolId: string): void {
+    setTimeout(
+      () => this.store.broadcast({ type: 'agentToolDone', id, toolId }),
+      TOOL_DONE_DELAY_MS,
+    );
   }
 
   private createAgent(s: AcpxSession): AgentState {

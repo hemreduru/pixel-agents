@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AcpxWatcher, parseAcpxRecord } from '../src/acpxWatcher.js';
 import { AgentStateStore } from '../src/agentStateStore.js';
+import { ACPX_SCAN_INTERVAL_MS } from '../src/constants.js';
 
 const FIXTURES = path.join(__dirname, 'fixtures', 'acpx');
 const fixture = (name: string): Record<string, unknown> =>
@@ -144,7 +145,20 @@ describe('AcpxWatcher lifecycle', () => {
     expect(store.size).toBe(0);
   });
 
-  it('marks an open record idle after 60s without updates', () => {
+  it('marks an open record idle after 60s without updates once its tools are done', () => {
+    write('a.json', {
+      closed: false,
+      updated_at: new Date().toISOString(),
+      messages: messages(['s1'], ['s1']),
+    });
+    watcher.scan();
+    sent.length = 0;
+    vi.advanceTimersByTime(61_000);
+    watcher.scan();
+    expect(sent.some((m) => m.type === 'agentStatus' && m.status === 'waiting')).toBe(true);
+  });
+
+  it('does not mark the agent waiting while a tool is still running', () => {
     write('a.json', {
       closed: false,
       updated_at: new Date().toISOString(),
@@ -154,6 +168,39 @@ describe('AcpxWatcher lifecycle', () => {
     sent.length = 0;
     vi.advanceTimersByTime(61_000);
     watcher.scan();
-    expect(sent.some((m) => m.type === 'agentStatus' && m.status === 'waiting')).toBe(true);
+    expect(sent.some((m) => m.type === 'agentStatus' && m.status === 'waiting')).toBe(false);
+  });
+
+  it('finishes tools that dropped out of the latest agent turn', () => {
+    write('a.json', { closed: false, messages: messages(['s1']) });
+    watcher.scan();
+    const agent = [...store.values()][0];
+    write('a.json', { closed: false, messages: messages(['s2']) });
+    watcher.scan();
+    vi.advanceTimersByTime(1000);
+    expect(sent.some((m) => m.type === 'agentToolDone' && m.toolId === 's1')).toBe(true);
+    expect([...agent.activeToolIds]).toEqual(['s2']);
+  });
+
+  it.each([0, -1, 1.5])('treats pid %s as not alive', (pid) => {
+    const real = new AcpxWatcher(store, dir, () => {});
+    write('a.json', { closed: false, pid });
+    real.scan();
+    expect(store.size).toBe(0);
+    real.dispose();
+  });
+
+  it('picks up sessions when the sessions dir is created after start()', () => {
+    const late = path.join(dir, 'late');
+    const w = new AcpxWatcher(store, late, () => {}, { isPidAlive: () => true });
+    w.start();
+    fs.mkdirSync(late);
+    fs.writeFileSync(
+      path.join(late, 'a.json'),
+      JSON.stringify({ ...fixture('agy-pro.json'), closed: false, messages: [] }),
+    );
+    vi.advanceTimersByTime(ACPX_SCAN_INTERVAL_MS);
+    expect(store.size).toBe(1);
+    w.dispose();
   });
 });
