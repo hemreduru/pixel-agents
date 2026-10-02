@@ -41,6 +41,42 @@ describe('parseAcpxRecord', () => {
     expect(s.tools).toEqual([]);
   });
 
+  const record = (agentId: string, command: string, argv: string[]) => ({
+    schema: 'acpx.session.v1',
+    acpx_record_id: `agent:${agentId}:acp:a:oneshot:b`,
+    agent_command: command,
+    agent_argv: argv,
+    cwd: '/x',
+    messages: [],
+  });
+
+  it('detects Cursor from the agent command and reads --model', () => {
+    const s = parseAcpxRecord(
+      record('cursor-opus', '/opt/bin/cursor-agent --model sonnet-5.5 acp', [
+        '/opt/bin/cursor-agent',
+        '--model',
+        'sonnet-5.5',
+        'acp',
+      ]),
+    )!;
+    expect(s.providerId).toBe('cursor');
+    expect(s.model).toBe('sonnet-5.5');
+  });
+
+  it('detects Cursor from argv alone', () => {
+    const s = parseAcpxRecord(record('cursor-composer', '', ['cursor-agent', 'acp']))!;
+    expect(s.providerId).toBe('cursor');
+    expect(s.model).toBeUndefined();
+  });
+
+  it('detects Antigravity from argv alone and reads -m', () => {
+    const s = parseAcpxRecord(
+      record('agy-flash', '', ['/opt/antigravity/bin/agy', '-m', 'gemini-3.8-flash']),
+    )!;
+    expect(s.providerId).toBe('antigravity');
+    expect(s.model).toBe('gemini-3.8-flash');
+  });
+
   it('rejects other schemas and garbage', () => {
     expect(parseAcpxRecord({ schema: 'other' })).toBeNull();
     expect(parseAcpxRecord(null)).toBeNull();

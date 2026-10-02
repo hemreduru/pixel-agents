@@ -60,11 +60,16 @@ export function parseAcpxRecord(raw: unknown): AcpxSession | null {
   if (!agentId) return null;
 
   const argv = Array.isArray(raw.agent_argv) ? (raw.agent_argv as unknown[]) : [];
-  const mIdx = argv.indexOf('-m');
+  const mIdx = argv.findIndex((a) => a === '-m' || a === '--model');
   const model =
     mIdx >= 0 && typeof argv[mIdx + 1] === 'string' ? (argv[mIdx + 1] as string) : undefined;
   const command = typeof raw.agent_command === 'string' ? raw.agent_command : '';
-  const providerId = command.includes('antigravity') ? 'antigravity' : agentId;
+  const launch = [command, ...argv.filter((a): a is string => typeof a === 'string')].join(' ');
+  const providerId = launch.includes('cursor-agent')
+    ? 'cursor'
+    : launch.includes('antigravity')
+      ? 'antigravity'
+      : agentId;
 
   const messages = Array.isArray(raw.messages) ? (raw.messages as unknown[]) : [];
   const tools: AcpxTool[] = [];

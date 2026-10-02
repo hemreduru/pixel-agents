@@ -312,3 +312,9 @@ export const PET_THUMB_SCALE_MARGIN = 0.85;
 export const EMPTY_SPRITE_THUMBNAIL_BG = '#333';
 /** Maximum string length for a PlacedPet.id (defends against pathologically-long layout entries). */
 export const MAX_PET_ID_LENGTH = 128;
+
+// ── Agent labels ──────────────────────────────────────────────
+/** Height of a one-line (compact) overlay label. */
+export const OVERLAY_COMPACT_HEIGHT_PX = 30;
+/** Step by which an overlay label that collides with another is lifted. */
+export const OVERLAY_STACK_STEP_PX = 6;

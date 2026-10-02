@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { getAgentNameLabel } from '../office/components/agentLabels.js';
+import { ProviderBadge } from '../office/components/ProviderBadge.js';
 import type { OfficeState } from '../office/engine/officeState.js';
 import type { ToolActivity } from '../office/types.js';
 import { transport } from '../transport/index.js';
@@ -103,6 +105,8 @@ export function DebugView({
     const status = agentStatuses[id];
     const hasActiveTools = tools.some((t) => !t.done);
     const diag = diagnostics[id];
+    const ch = officeState.characters.get(id);
+    const agentLabel = ch?.folderName ? getAgentNameLabel(ch.folderName) : undefined;
     return (
       <div
         key={id}
@@ -110,11 +114,15 @@ export function DebugView({
         onClick={() => onSelectAgent(id)}
       >
         <span className="flex items-center justify-between">
-          <span
-            className={`rounded-none py-6 px-10 text-xl ${isSelected ? 'text-white font-bold' : ''}`}
-          >
-            Agent #{id}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded-none py-6 px-10 text-xl ${isSelected ? 'text-white font-bold' : ''}`}
+            >
+              Agent #{id}
+            </span>
+            {agentLabel && <span className="text-xs text-text-muted">({agentLabel})</span>}
+            {ch?.providerId && <ProviderBadge providerId={ch.providerId} model={ch.model} />}
+          </div>
           <Button
             variant="ghost"
             size="sm"

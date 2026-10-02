@@ -105,9 +105,61 @@ describe('paletteAssigner', () => {
         expect(a.hueShift).toBe(prev?.hueShift);
       }
     });
+
+    it('assigns warm palettes [1, 2, 5] for claude agents', () => {
+      const agent = createTestAgent({ id: 1, providerId: 'claude' });
+      assignPaletteIfNeeded(agent, store);
+      expect([1, 2, 5]).toContain(agent.palette);
+      expect(agent.hueShift).toBe(0);
+    });
+
+    it('assigns cool palettes [0, 3, 4] for antigravity agents', () => {
+      const agent = createTestAgent({ id: 1, providerId: 'antigravity' });
+      assignPaletteIfNeeded(agent, store);
+      expect([0, 3, 4]).toContain(agent.palette);
+      expect(agent.hueShift).toBe(0);
+    });
+
+    it('bounds hue shift to <= 25 for provider-restricted agents in subsequent rounds', () => {
+      // Seed warm palettes: 1, 2, 5
+      store.set(1, createTestAgent({ id: 1, palette: 1, hueShift: 0, providerId: 'claude' }));
+      store.set(2, createTestAgent({ id: 2, palette: 2, hueShift: 0, providerId: 'claude' }));
+      store.set(3, createTestAgent({ id: 3, palette: 5, hueShift: 0, providerId: 'claude' }));
+
+      const agent = createTestAgent({ id: 4, providerId: 'claude' });
+      assignPaletteIfNeeded(agent, store);
+      expect([1, 2, 5]).toContain(agent.palette);
+      expect(agent.hueShift).toBeGreaterThanOrEqual(1);
+      expect(agent.hueShift).toBeLessThanOrEqual(25);
+    });
+
+    it('assigns manager palette (0) and hueShift (45) for workspace folder', () => {
+      const agent = createTestAgent({ id: 1, folderName: 'workspace' });
+      assignPaletteIfNeeded(agent, store);
+      expect(agent.palette).toBe(0);
+      expect(agent.hueShift).toBe(45);
+    });
+
+    it('assigns manager palette even if folderName is a path ending in workspace', () => {
+      const agent = createTestAgent({ id: 1, folderName: '/home/user/code/workspace' });
+      assignPaletteIfNeeded(agent, store);
+      expect(agent.palette).toBe(0);
+      expect(agent.hueShift).toBe(45);
+    });
   });
 
   describe('setPaletteCount', () => {
+    it('clamps non-positive and fractional counts to at least 1', () => {
+      setPaletteCount(0);
+      const agent = createTestAgent({ id: 1 });
+      assignPaletteIfNeeded(agent, store);
+      expect(agent.palette).toBe(0);
+      setPaletteCount(2.9);
+      const second = createTestAgent({ id: 2 });
+      assignPaletteIfNeeded(second, store);
+      expect([0, 1]).toContain(second.palette);
+    });
+
     it('picks from [0, N) when set above the default 6', () => {
       setPaletteCount(8);
       // Six agents get 0..5; the seventh must pick from [0, 8) -- if the
