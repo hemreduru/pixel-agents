@@ -232,7 +232,16 @@ export function useExtensionMessages(
         }
         // Add buffered agents now that layout (and seats) are correct
         for (const p of pendingAgents) {
-          os.addAgent(p.id, p.palette, p.hueShift, p.seatId, true, p.folderName);
+          os.addAgent(
+            p.id,
+            p.palette,
+            p.hueShift,
+            p.seatId,
+            true,
+            p.folderName,
+            undefined,
+            p.info?.providerId,
+          );
           if (p.isHeadless) os.setHeadless(p.id, true);
           if (p.info) os.setAgentInfo(p.id, p.info);
         }
@@ -284,7 +293,16 @@ export function useExtensionMessages(
         } else {
           const palette = msg.palette as number | undefined;
           const hueShift = msg.hueShift as number | undefined;
-          os.addAgent(id, palette, hueShift, undefined, undefined, folderName);
+          os.addAgent(
+            id,
+            palette,
+            hueShift,
+            undefined,
+            undefined,
+            folderName,
+            undefined,
+            msg.providerId as string | undefined,
+          );
           noteFolderName(folderName);
           if (isHeadlessAgent(msg.isExternal as boolean | undefined)) {
             os.setHeadless(id, true);

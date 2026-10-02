@@ -45,6 +45,8 @@ export interface ExistingAgentsOffice {
     preferredSeatId?: string,
     skipSpawnEffect?: boolean,
     folderName?: string,
+    nearAgentId?: number,
+    providerId?: string,
   ) => void;
   setHeadless: (id: number, headless: boolean) => void;
   setAgentInfo: (id: number, info: AgentInfo) => void;
@@ -80,7 +82,16 @@ export function reconcileExistingAgents(
     };
     if (layoutReady) {
       if (!os.characters.has(p.id)) {
-        os.addAgent(p.id, p.palette, p.hueShift, p.seatId, true, p.folderName);
+        os.addAgent(
+          p.id,
+          p.palette,
+          p.hueShift,
+          p.seatId,
+          true,
+          p.folderName,
+          undefined,
+          p.info?.providerId,
+        );
         if (p.isHeadless) os.setHeadless(p.id, true);
         if (p.info) os.setAgentInfo(p.id, p.info);
         addedDirectly = true;
