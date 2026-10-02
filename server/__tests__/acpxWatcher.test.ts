@@ -16,7 +16,7 @@ describe('parseAcpxRecord', () => {
     expect(s.agentId).toBe('agy-pro');
     expect(s.model).toBe('gemini-3.1-pro-high');
     expect(s.providerId).toBe('antigravity');
-    expect(s.cwd).toBe('/srv/projeler/claude-office');
+    expect(s.cwd).toBe('/tmp/demo-project');
     expect(s.closed).toBe(true);
     expect(s.tools.map((t) => t.name)).toEqual([
       'run_command',
@@ -119,7 +119,7 @@ describe('AcpxWatcher lifecycle', () => {
     watcher.scan();
     expect(store.size).toBe(1);
     const agent = [...store.values()][0];
-    expect(agent.folderName).toBe('claude-office');
+    expect(agent.folderName).toBe('demo-project');
     expect(agent.agentName).toBe('agy-pro · gemini-3.1-pro-high');
     expect(agent.providerId).toBe('antigravity');
     expect(agent.model).toBe('gemini-3.1-pro-high');

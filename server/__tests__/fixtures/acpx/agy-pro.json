@@ -1,91 +1,30 @@
 {
  "schema": "acpx.session.v1",
- "acpx_record_id": "agent:agy-pro:acp:957169a9-a806-4d91-b3e0-90065426556a:oneshot:646fe430-0707-4cac-9c11-90202b38c47a",
- "agent_command": "/home/nuri/.npm-global/bin/google-antigravity-acp -b /home/nuri/.local/bin/agy -m gemini-3.1-pro-high -e high",
- "agent_argv": [
-  "/home/nuri/.npm-global/bin/google-antigravity-acp",
-  "-b",
-  "/home/nuri/.local/bin/agy",
-  "-m",
-  "gemini-3.1-pro-high",
-  "-e",
-  "high"
- ],
- "cwd": "/srv/projeler/claude-office",
- "created_at": "2026-10-02T17:53:45.309Z",
- "updated_at": "2026-10-02T17:54:01.258Z",
- "last_used_at": "2026-10-02T17:54:06.775Z",
+ "acpx_record_id": "agent:agy-pro:acp:00000000-0000-4000-8000-000000000001:oneshot:00000000-0000-4000-8000-000000000002",
+ "agent_command": "/usr/bin/google-antigravity-acp -m gemini-3.1-pro-high",
+ "agent_argv": ["/usr/bin/google-antigravity-acp", "-m", "gemini-3.1-pro-high"],
+ "cwd": "/tmp/demo-project",
+ "created_at": "2026-01-01T10:00:00.000Z",
+ "updated_at": "2026-01-01T10:00:10.000Z",
+ "last_used_at": "2026-01-01T10:00:10.000Z",
  "closed": true,
- "closed_at": "2026-10-02T17:54:08.680Z",
- "pid": 250575,
+ "closed_at": "2026-01-01T10:00:12.000Z",
+ "pid": 12345,
  "messages": [
-  {
-   "User": {
-    "id": "6bf390da-193d-49a2-91b0-78f91cee5c7d",
-    "content": [
-     {
-      "Text": "# Task: (trimmed)"
-     }
-    ]
-   }
-  },
+  { "User": { "id": "00000000-0000-4000-8000-000000000003", "content": [{ "Text": "Demo task" }] } },
   {
    "Agent": {
     "content": [
-     {
-      "ToolUse": {
-       "id": "step_2",
-       "name": "Executing run_command",
-       "input": {},
-       "is_input_complete": true,
-       "thought_signature": null
-      }
-     },
-     {
-      "ToolUse": {
-       "id": "step_4",
-       "name": "Executing view_file",
-       "input": {},
-       "is_input_complete": true,
-       "thought_signature": null
-      }
-     },
-     {
-      "ToolUse": {
-       "id": "step_5",
-       "name": "Executing view_file",
-       "input": {},
-       "is_input_complete": true,
-       "thought_signature": null
-      }
-     },
-     {
-      "ToolUse": {
-       "id": "step_6",
-       "name": "Executing run_command",
-       "input": {},
-       "is_input_complete": true,
-       "thought_signature": null
-      }
-     }
+     { "ToolUse": { "id": "step_1", "name": "Executing run_command", "input": {}, "is_input_complete": true } },
+     { "ToolUse": { "id": "step_2", "name": "Executing view_file", "input": {}, "is_input_complete": true } },
+     { "ToolUse": { "id": "step_3", "name": "Executing view_file", "input": {}, "is_input_complete": true } },
+     { "ToolUse": { "id": "step_4", "name": "Executing run_command", "input": {}, "is_input_complete": true } }
     ],
     "tool_results": {
-     "step_2": {
-      "tool_use_id": "step_2",
-      "tool_name": "Executing run_command"
-     },
-     "step_4": {
-      "tool_use_id": "step_4",
-      "tool_name": "Executing view_file"
-     },
-     "step_5": {
-      "tool_use_id": "step_5",
-      "tool_name": "Executing view_file"
-     },
-     "step_6": {
-      "tool_use_id": "step_6",
-      "tool_name": "Executing run_command"
-     }
+     "step_1": { "tool_use_id": "step_1", "tool_name": "Executing run_command" },
+     "step_2": { "tool_use_id": "step_2", "tool_name": "Executing view_file" },
+     "step_3": { "tool_use_id": "step_3", "tool_name": "Executing view_file" },
+     "step_4": { "tool_use_id": "step_4", "tool_name": "Executing run_command" }
     }
    }
   }
