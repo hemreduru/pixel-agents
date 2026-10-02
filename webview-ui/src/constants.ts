@@ -313,7 +313,8 @@ export const EMPTY_SPRITE_THUMBNAIL_BG = '#333';
 /** Maximum string length for a PlacedPet.id (defends against pathologically-long layout entries). */
 export const MAX_PET_ID_LENGTH = 128;
 
-// ── Provider Badge Colors ────────────────────────────────────
-export const CLAUDE_BADGE_COLOR = '#D97757';
-export const ANTIGRAVITY_BADGE_COLOR = '#8B5CF6';
-export const UNKNOWN_BADGE_COLOR = '#9CA3AF';
+// ── Agent labels ──────────────────────────────────────────────
+/** Height of a one-line (compact) overlay label. */
+export const OVERLAY_COMPACT_HEIGHT_PX = 30;
+/** Step by which an overlay label that collides with another is lifted. */
+export const OVERLAY_STACK_STEP_PX = 6;

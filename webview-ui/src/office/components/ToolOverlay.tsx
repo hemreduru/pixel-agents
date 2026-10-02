@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '../../components/ui/Button.js';
 import {
@@ -13,6 +13,8 @@ import {
   CONTEXT_GAUGE_HEIGHT_PX,
   CONTEXT_GAUGE_WIDTH_PX,
   CONTEXT_WARN_THRESHOLD,
+  OVERLAY_COMPACT_HEIGHT_PX,
+  OVERLAY_STACK_STEP_PX,
   TEAM_LEAD_COLOR,
   TEAM_ROLE_COLOR,
   TOOL_OVERLAY_VERTICAL_OFFSET,
@@ -20,9 +22,10 @@ import {
 import type { SubagentCharacter } from '../../hooks/useExtensionMessages.js';
 import type { OfficeState } from '../engine/officeState.js';
 import { overlayProjection } from '../projection.js';
-import type { ToolActivity } from '../types.js';
+import type { Character, ToolActivity } from '../types.js';
 import { CharacterState } from '../types.js';
-import { getAgentNameLabel } from './agentLabels.js';
+import { getAgentNameLabel, getAgentShortName, getAgentTitle } from './agentLabels.js';
+import { stackLabels } from './labelStacking.js';
 import { ProviderBadge } from './ProviderBadge.js';
 
 // Both turn-end states show the green checkmark bubble. A finished turn (Stop)
@@ -42,6 +45,21 @@ interface ToolOverlayProps {
   panRef: React.RefObject<{ x: number; y: number }>;
   onCloseAgent: (id: number) => void;
   alwaysShowOverlay: boolean;
+}
+
+/** Distance from the anchor point up to the top of a full label without extra lines. */
+const FULL_LABEL_TOP_OFFSET_PX = 28;
+
+/** An agent named by its provider (an ACP session), not by a team role. */
+function isProviderNamed(ch: Character): boolean {
+  return !!(
+    ch.providerId &&
+    ch.agentName &&
+    !ch.isSubagent &&
+    !ch.isTeamLead &&
+    !ch.teamName &&
+    ch.leadAgentId === undefined
+  );
 }
 
 /** Derive a short human-readable activity string from tools/status */
@@ -106,6 +124,9 @@ export function ToolOverlay({
     return () => cancelAnimationFrame(rafId);
   }, []);
 
+  // Rendered size of each label, read back after the previous frame; stacking needs real widths.
+  const sizes = useRef(new Map<number, { width: number; height: number }>());
+
   const el = containerRef.current;
   if (!el) return null;
   const project = overlayProjection(
@@ -121,6 +142,30 @@ export function ToolOverlay({
 
   // All character IDs
   const allIds = [...agents, ...subagentCharacters.map((s) => s.id)];
+
+  // Labels that are merely "always shown" must not cover each other: stack colliding
+  // ones upward. The focused (hovered/selected) label stays put, on top.
+  const stackable = allIds.flatMap((id) => {
+    const ch = officeState.characters.get(id);
+    if (!ch || !alwaysShowOverlay || id === selectedId || id === hoveredId) return [];
+    if (ch.bubbleType === 'waiting' && !ch.waitingAwaitingInput) return []; // checkmark only
+    const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0;
+    const size = sizes.current.get(id) ?? { width: 0, height: OVERLAY_COMPACT_HEIGHT_PX };
+    return [
+      {
+        id,
+        x: project.toScreenX(ch.x),
+        top:
+          project.toScreenY(ch.y + sittingOffset - TOOL_OVERLAY_VERTICAL_OFFSET) -
+          (isProviderNamed(ch) ? OVERLAY_COMPACT_HEIGHT_PX : FULL_LABEL_TOP_OFFSET_PX),
+        ...size,
+      },
+    ];
+  });
+  const measure = (id: number, node: HTMLElement | null): void => {
+    if (node) sizes.current.set(id, { width: node.offsetWidth, height: node.offsetHeight });
+  };
+  const stackOffsets = stackLabels(stackable, OVERLAY_STACK_STEP_PX);
 
   return (
     <>
@@ -156,6 +201,37 @@ export function ToolOverlay({
               data-testid="agent-overlay"
               data-agent-id={id}
             />
+          );
+        }
+
+        // Provider-named agents that are only "always shown" get a one-line label:
+        // badge + short name. Hover/select brings back the full label.
+        const stackOffset = stackOffsets.get(id) ?? 0;
+        if (isProviderNamed(ch) && !isSelected && !isHovered) {
+          return (
+            <div
+              key={id}
+              ref={(node) => measure(id, node)}
+              className="absolute -translate-x-1/2"
+              style={{
+                left: screenX,
+                top: screenY - OVERLAY_COMPACT_HEIGHT_PX - stackOffset,
+                pointerEvents: 'none',
+                opacity: 0.85,
+                zIndex: 41,
+              }}
+              data-testid="agent-overlay"
+              data-agent-id={id}
+            >
+              <div className="flex pixel-panel border-border px-6 py-2 whitespace-nowrap">
+                <ProviderBadge
+                  providerId={ch.providerId}
+                  model={ch.model}
+                  label={getAgentShortName(ch.providerId!, ch.model, ch.folderName)}
+                  className="text-xs"
+                />
+              </div>
+            </div>
           );
         }
 
@@ -204,7 +280,8 @@ export function ToolOverlay({
         }
 
         // Team info
-        const teamRoleLabel = ch.isTeamLead ? 'LEAD' : ch.agentName || null;
+        const providerNamed = isProviderNamed(ch);
+        const teamRoleLabel = ch.isTeamLead ? 'LEAD' : providerNamed ? null : ch.agentName || null;
         const hasExtraLines = !!(ch.folderName || ch.providerId || teamRoleLabel);
 
         // Context gauge. Every agent gets one — lead, teammate, adopted,
@@ -216,10 +293,11 @@ export function ToolOverlay({
         return (
           <div
             key={id}
+            ref={(node) => measure(id, node)}
             className="absolute flex flex-col items-center -translate-x-1/2"
             style={{
               left: screenX,
-              top: screenY - (hasExtraLines ? 34 : 28),
+              top: screenY - (hasExtraLines ? 34 : FULL_LABEL_TOP_OFFSET_PX) - stackOffset,
               pointerEvents: isSelected ? 'auto' : 'none',
               opacity: alwaysShowOverlay && !isSelected && !isHovered ? (isSub ? 0.5 : 0.75) : 1,
               zIndex: isSelected ? 42 : 41,
@@ -235,6 +313,14 @@ export function ToolOverlay({
                 />
               )}
               <div className="flex flex-col gap-0 overflow-hidden">
+                {providerNamed && (
+                  <ProviderBadge
+                    providerId={ch.providerId}
+                    model={ch.model}
+                    label={getAgentTitle(ch.providerId!, ch.model)}
+                    className="text-xs"
+                  />
+                )}
                 {teamRoleLabel && (
                   <span
                     className="overflow-hidden text-ellipsis block leading-none"
@@ -263,7 +349,9 @@ export function ToolOverlay({
                         {getAgentNameLabel(ch.folderName)}
                       </span>
                     )}
-                    <ProviderBadge providerId={ch.providerId} model={ch.model} />
+                    {!providerNamed && (
+                      <ProviderBadge providerId={ch.providerId} model={ch.model} />
+                    )}
                   </div>
                 )}
               </div>

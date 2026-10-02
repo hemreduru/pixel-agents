@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   formatModelName,
   getAgentNameLabel,
+  getAgentShortName,
+  getAgentTitle,
   getProviderDisplayName,
   getProviderTitle,
 } from './agentLabels.js';
@@ -62,7 +64,11 @@ describe('agentLabels', () => {
 
     it('returns provider id for unknown providers', () => {
       expect(getProviderTitle('openai', 'gpt-4o')).toBe('openai');
-      expect(getProviderTitle('cursor', undefined)).toBe('cursor');
+    });
+
+    it('returns the formatted model for cursor, undefined without one', () => {
+      expect(getProviderTitle('cursor', 'sonnet-5.5')).toBe('Sonnet 5.5');
+      expect(getProviderTitle('cursor', undefined)).toBeUndefined();
     });
 
     it('returns undefined if providerId is missing', () => {
@@ -74,10 +80,34 @@ describe('agentLabels', () => {
     it('returns formatted name for known providers', () => {
       expect(getProviderDisplayName('claude')).toBe('Claude');
       expect(getProviderDisplayName('antigravity')).toBe('Antigravity');
+      expect(getProviderDisplayName('cursor')).toBe('Cursor');
     });
 
     it('returns raw provider id for unknown providers', () => {
       expect(getProviderDisplayName('openai')).toBe('openai');
+    });
+  });
+
+  describe('getAgentTitle', () => {
+    it('joins the provider name and the formatted model', () => {
+      expect(getAgentTitle('antigravity', 'gemini-3.8-flash')).toBe(
+        'Antigravity · Gemini 3.8 Flash',
+      );
+      expect(getAgentTitle('cursor', 'sonnet-5.5')).toBe('Cursor · Sonnet 5.5');
+    });
+
+    it('is just the provider name without a model', () => {
+      expect(getAgentTitle('cursor')).toBe('Cursor');
+    });
+  });
+
+  describe('getAgentShortName', () => {
+    it('prefers the manager label, then the model, then the provider', () => {
+      expect(getAgentShortName('antigravity', 'gemini-3.8-flash', 'workspace')).toBe(
+        'Nuri · müdür',
+      );
+      expect(getAgentShortName('antigravity', 'gemini-3.8-flash', 'demo')).toBe('Gemini 3.8 Flash');
+      expect(getAgentShortName('cursor', undefined, 'demo')).toBe('Cursor');
     });
   });
 });

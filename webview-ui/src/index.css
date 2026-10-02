@@ -40,6 +40,7 @@
   /* Provider badge */
   --color-provider-claude: #d97757;
   --color-provider-antigravity: #8b5cf6;
+  --color-provider-cursor: #e8e8ee;
   --color-provider-unknown: #9ca3af;
 
   /* Shadow */
@@ -90,6 +91,7 @@
   --color-status-error: var(--color-status-error);
   --color-provider-claude: var(--color-provider-claude);
   --color-provider-antigravity: var(--color-provider-antigravity);
+  --color-provider-cursor: var(--color-provider-cursor);
   --color-provider-unknown: var(--color-provider-unknown);
 
   /* Shadow */

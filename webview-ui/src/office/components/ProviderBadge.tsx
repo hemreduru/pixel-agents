@@ -3,14 +3,16 @@ import { getProviderDisplayName, getProviderTitle } from './agentLabels.js';
 export interface ProviderBadgeProps {
   providerId?: string;
   model?: string;
+  /** Text shown beside the glyph; defaults to the provider's display name. */
+  label?: string;
   className?: string;
 }
 
-export function ProviderBadge({ providerId, model, className }: ProviderBadgeProps) {
+export function ProviderBadge({ providerId, model, label, className }: ProviderBadgeProps) {
   if (!providerId) return null;
 
   const title = getProviderTitle(providerId, model);
-  const displayName = getProviderDisplayName(providerId);
+  const displayName = label ?? getProviderDisplayName(providerId);
 
   let glyph: React.ReactNode;
   if (providerId === 'claude') {
@@ -45,6 +47,25 @@ export function ProviderBadge({ providerId, model, className }: ProviderBadgePro
         <rect x="0" y="3" width="7" height="1" fill="currentColor" />
         <rect x="2" y="2" width="3" height="3" fill="currentColor" />
         <rect x="3" y="3" width="1" height="1" fill="white" />
+      </svg>
+    );
+  } else if (providerId === 'cursor') {
+    glyph = (
+      <svg
+        width="7"
+        height="7"
+        viewBox="0 0 7 7"
+        className="shrink-0 text-provider-cursor"
+        style={{ shapeRendering: 'crispEdges' }}
+        aria-hidden="true"
+      >
+        <rect x="3" y="0" width="1" height="1" fill="currentColor" />
+        <rect x="2" y="1" width="3" height="1" fill="currentColor" />
+        <rect x="1" y="2" width="5" height="1" fill="currentColor" />
+        <rect x="1" y="3" width="2" height="2" fill="currentColor" fillOpacity="0.55" />
+        <rect x="2" y="5" width="1" height="1" fill="currentColor" fillOpacity="0.55" />
+        <rect x="4" y="3" width="2" height="2" fill="currentColor" fillOpacity="0.8" />
+        <rect x="4" y="5" width="1" height="1" fill="currentColor" fillOpacity="0.8" />
       </svg>
     );
   } else {

@@ -31,7 +31,7 @@ export function getProviderTitle(providerId?: string, model?: string): string | 
     return formattedModel;
   }
 
-  if (providerId === 'claude') {
+  if (providerId === 'claude' || providerId === 'cursor') {
     return formattedModel;
   }
 
@@ -41,5 +41,19 @@ export function getProviderTitle(providerId?: string, model?: string): string | 
 export function getProviderDisplayName(providerId: string): string {
   if (providerId === 'claude') return 'Claude';
   if (providerId === 'antigravity') return 'Antigravity';
+  if (providerId === 'cursor') return 'Cursor';
   return providerId;
+}
+
+/** Full agent title, e.g. "Cursor · Sonnet 5.5"; just the provider name when the model is unknown. */
+export function getAgentTitle(providerId: string, model?: string): string {
+  const provider = getProviderDisplayName(providerId);
+  return model ? `${provider} · ${formatModelName(model)}` : provider;
+}
+
+/** Compact one-line name: the manager label for a manager folder, else the model, else the provider. */
+export function getAgentShortName(providerId: string, model?: string, folderName?: string): string {
+  const managerLabel = MANAGER_FOLDER_CONFIG[getCleanFolderName(folderName) ?? '']?.label;
+  if (managerLabel) return managerLabel;
+  return model ? formatModelName(model) : getProviderDisplayName(providerId);
 }
