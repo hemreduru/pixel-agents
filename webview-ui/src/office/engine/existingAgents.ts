@@ -12,7 +12,13 @@
 // surface that sends layout first (e.g. the VS Code no-assets path), issue #334.
 
 /** Per-agent seat metadata carried by the existingAgents message. */
-export interface ExistingAgentMeta {
+export interface AgentInfo {
+  providerId?: string;
+  model?: string;
+  agentName?: string;
+}
+
+export interface ExistingAgentMeta extends AgentInfo {
   palette?: number;
   hueShift?: number;
   seatId?: string;
@@ -26,6 +32,7 @@ export interface PendingAgent {
   seatId?: string;
   folderName?: string;
   isHeadless?: boolean;
+  info?: AgentInfo;
 }
 
 /** Minimal structural view of OfficeState this reconciler needs. */
@@ -40,6 +47,7 @@ export interface ExistingAgentsOffice {
     folderName?: string,
   ) => void;
   setHeadless: (id: number, headless: boolean) => void;
+  setAgentInfo: (id: number, info: AgentInfo) => void;
 }
 
 /**
@@ -68,11 +76,13 @@ export function reconcileExistingAgents(
       seatId: m?.seatId,
       folderName: folderNames[id],
       isHeadless: headlessAgents[id] === true,
+      info: { providerId: m?.providerId, model: m?.model, agentName: m?.agentName },
     };
     if (layoutReady) {
       if (!os.characters.has(p.id)) {
         os.addAgent(p.id, p.palette, p.hueShift, p.seatId, true, p.folderName);
         if (p.isHeadless) os.setHeadless(p.id, true);
+        if (p.info) os.setAgentInfo(p.id, p.info);
         addedDirectly = true;
       }
     } else {

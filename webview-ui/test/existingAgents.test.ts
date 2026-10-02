@@ -55,6 +55,7 @@ function fakeOffice(
     setHeadless: (id, isHeadless) => {
       if (isHeadless) headless.push(id);
     },
+    setAgentInfo: () => {},
   };
 }
 
@@ -91,7 +92,7 @@ test('layout not ready: buffers restored agents for the later layoutLoaded flush
   const os = fakeOffice();
   const pending: PendingAgent[] = [];
   const meta: Record<number, ExistingAgentMeta> = {
-    5: { palette: 2, hueShift: 90, seatId: 'seat-a' },
+    5: { palette: 2, hueShift: 90, seatId: 'seat-a', providerId: 'antigravity', model: 'm1' },
   };
   const folderNames: Record<number, string> = { 5: 'alpha' };
 
@@ -100,7 +101,15 @@ test('layout not ready: buffers restored agents for the later layoutLoaded flush
   assert.equal(addedDirectly, false);
   assert.equal(os.calls.length, 0, 'no agent should be added before the layout is ready');
   assert.deepEqual(pending, [
-    { id: 5, palette: 2, hueShift: 90, seatId: 'seat-a', folderName: 'alpha', isHeadless: false },
+    {
+      id: 5,
+      palette: 2,
+      hueShift: 90,
+      seatId: 'seat-a',
+      folderName: 'alpha',
+      isHeadless: false,
+      info: { providerId: 'antigravity', model: 'm1', agentName: undefined },
+    },
   ]);
 });
 

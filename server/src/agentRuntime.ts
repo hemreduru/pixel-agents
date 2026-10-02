@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import type { HookProvider } from '../../core/src/provider.js';
+import { AcpxWatcher } from './acpxWatcher.js';
 import type { AgentStateStore } from './agentStateStore.js';
 import { DEFAULT_MAX_CONTEXT_TOKENS } from './constants.js';
 import { DismissalTracker } from './dismissalTracker.js';
@@ -73,6 +74,7 @@ export class AgentRuntime {
   readonly activeAgentId = { current: null as number | null };
   private externalScanTimer: ReturnType<typeof setInterval> | null = null;
   private staleCheckTimer: ReturnType<typeof setInterval> | null = null;
+  private acpxWatcher: AcpxWatcher | null = null;
 
   // Configuration refs (mutable, shared with scanners)
   readonly watchAllSessions = { current: false };
@@ -449,6 +451,13 @@ export class AgentRuntime {
     );
   }
 
+  /** Show OpenClaw ACP sessions from `dir` (no-op when the directory is missing). */
+  startAcpxWatching(dir: string): void {
+    if (this.acpxWatcher) return;
+    this.acpxWatcher = new AcpxWatcher(this.store, dir, (id) => this.removeAgent(id));
+    this.acpxWatcher.start();
+  }
+
   // ── Restore persisted external agents (standalone) ──
 
   /**
@@ -560,6 +569,7 @@ export class AgentRuntime {
   dispose(): void {
     this.hookEventHandler.dispose();
     this.subagentWatch.dispose();
+    this.acpxWatcher?.dispose();
 
     if (this.projectScanTimer.current) {
       clearInterval(this.projectScanTimer.current);

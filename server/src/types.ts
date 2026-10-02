@@ -34,6 +34,10 @@ export interface AgentState {
   hooksOnly?: boolean;
   /** Provider that created this agent (defaults to 'claude') */
   providerId?: string;
+  /** Model the agent runs on, when its source states one (ACP sessions) */
+  model?: string;
+  /** acpx session record this agent mirrors (ACP agents are derived state, never persisted) */
+  acpxRecordId?: string;
   /** Set when SessionEnd(reason=clear) fires; cleared when SessionStart(source=clear) reassigns */
   pendingClear?: boolean;
   /** Hook-generated tool ID for PreToolUse/PostToolUse correlation */

@@ -25,6 +25,11 @@ export const EXTERNAL_ACTIVE_THRESHOLD_MS = 120_000; // 2 minutes
 /** Remove external agents after this much inactivity */
 // export const EXTERNAL_STALE_TIMEOUT_MS = 300_000; // 5 minutes - deprecated
 export const EXTERNAL_STALE_CHECK_INTERVAL_MS = 30_000;
+// ── ACP (acpx) Session Detection ────────────────────────────
+export const ACPX_SCAN_INTERVAL_MS = 2000;
+/** An open acpx record untouched this long is shown idle (waiting) */
+export const ACPX_IDLE_THRESHOLD_MS = 60_000;
+
 /** Cooldown after user closes an agent via X. Must be > EXTERNAL_ACTIVE_THRESHOLD_MS
  *  so the file's mtime becomes stale before the dismissal expires. */
 export const DISMISSED_COOLDOWN_MS = 180_000; // 3 minutes

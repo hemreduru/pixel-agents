@@ -1,0 +1,26 @@
+{
+ "schema": "acpx.session.v1",
+ "acpx_record_id": "agent:claude:acp:00000000-0000-4000-8000-000000000011:oneshot:00000000-0000-4000-8000-000000000012",
+ "agent_command": "/usr/bin/claude-acp",
+ "agent_argv": ["/usr/bin/claude-acp"],
+ "cwd": "/tmp/demo-project",
+ "created_at": "2026-01-01T10:00:00.000Z",
+ "updated_at": "2026-01-01T10:00:10.000Z",
+ "last_used_at": "2026-01-01T10:00:10.000Z",
+ "closed": true,
+ "closed_at": "2026-01-01T10:00:12.000Z",
+ "pid": 12346,
+ "messages": [
+  { "User": { "id": "00000000-0000-4000-8000-000000000013", "content": [{ "Text": "Demo task" }] } },
+  {
+   "Agent": {
+    "content": [
+     { "ToolUse": { "id": "toolu_01", "name": "Read README.md", "input": {}, "is_input_complete": true } }
+    ],
+    "tool_results": {
+     "toolu_01": { "tool_use_id": "toolu_01", "tool_name": "Read README.md" }
+    }
+   }
+  }
+ ]
+}

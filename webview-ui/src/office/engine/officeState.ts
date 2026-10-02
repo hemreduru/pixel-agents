@@ -39,6 +39,7 @@ import type {
 } from '../types.js';
 import { CharacterState, Direction, PetState, TILE_SIZE } from '../types.js';
 import { createCharacter, updateCharacter } from './characters.js';
+import type { AgentInfo } from './existingAgents.js';
 import { advanceMatrixEffect, startMatrixEffect } from './matrixEffectState.js';
 import { createPet, updatePet } from './petEntity.js';
 import { anchorTile, closestFreeSeat } from './seatPlacement.js';
@@ -492,6 +493,17 @@ export class OfficeState {
       startMatrixEffect(ch, 'spawn');
     }
     this.characters.set(id, ch);
+  }
+
+  /** Provider metadata from the server; a non-team agentName becomes the overlay label. */
+  setAgentInfo(id: number, info: AgentInfo): void {
+    const ch = this.characters.get(id);
+    if (!ch) return;
+    ch.providerId = info.providerId;
+    ch.model = info.model;
+    if (info.agentName && !ch.isTeamLead && ch.leadAgentId === undefined) {
+      ch.agentName = info.agentName;
+    }
   }
 
   // ── Greeter ───────────────────────────────────────────────────
