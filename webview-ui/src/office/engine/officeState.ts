@@ -1,4 +1,9 @@
-import { pickDiversePalette } from '../../../../core/src/paletteUtils.js';
+import {
+  getCleanFolderName,
+  MANAGER_FOLDER_CONFIG,
+  type PalettePickOptions,
+  pickDiversePalette,
+} from '../../../../core/src/paletteUtils.js';
 import {
   AUTO_ON_FACING_DEPTH,
   AUTO_ON_SIDE_DEPTH,
@@ -412,7 +417,7 @@ export class OfficeState {
    * First 6 agents each get a unique skin (random order). Beyond 6, skins
    * repeat in balanced rounds with a random hue shift (≥45°).
    */
-  private pickDiversePalette(): { palette: number; hueShift: number } {
+  private pickDiversePalette(options?: PalettePickOptions): { palette: number; hueShift: number } {
     // Count how many non-sub-agents use each base palette (0-5)
     const paletteCount = getLoadedCharacterCount();
     const counts = new Array(paletteCount).fill(0) as number[];
@@ -420,7 +425,7 @@ export class OfficeState {
       if (ch.isSubagent) continue;
       if (ch.palette < paletteCount) counts[ch.palette]++;
     }
-    return pickDiversePalette(paletteCount, counts);
+    return pickDiversePalette(paletteCount, counts, options);
   }
 
   addAgent(
@@ -440,9 +445,15 @@ export class OfficeState {
       palette = preferredPalette;
       hueShift = preferredHueShift ?? 0;
     } else {
-      const pick = this.pickDiversePalette();
-      palette = pick.palette;
-      hueShift = pick.hueShift;
+      const cleanFolder = getCleanFolderName(folderName);
+      if (cleanFolder && MANAGER_FOLDER_CONFIG[cleanFolder]?.palette !== undefined) {
+        palette = MANAGER_FOLDER_CONFIG[cleanFolder].palette!;
+        hueShift = MANAGER_FOLDER_CONFIG[cleanFolder].hueShift ?? 0;
+      } else {
+        const pick = this.pickDiversePalette();
+        palette = pick.palette;
+        hueShift = pick.hueShift;
+      }
     }
 
     // Try preferred seat first, then (for teammates) the seat closest to the
