@@ -70,35 +70,35 @@ export function getCleanFolderName(folderPath?: string): string | undefined {
 }
 
 /**
+ * Fixed palette of a manager folder (see MANAGER_FOLDER_CONFIG), if `folderPath` is one.
+ */
+export function getManagerPalette(folderPath?: string): PalettePick | undefined {
+  const folder = getCleanFolderName(folderPath);
+  const manager = folder ? MANAGER_FOLDER_CONFIG[folder] : undefined;
+  if (manager?.palette === undefined) return undefined;
+  return { palette: manager.palette, hueShift: manager.hueShift ?? 0 };
+}
+
+/**
  * Pick a diverse palette based on current palette distribution.
- * First N agents each get a unique skin (where N = available palette count).
- * Beyond N, skins repeat in balanced rounds with a hue shift.
+ * First N agents each get a unique skin (where N = paletteCount).
+ * Beyond N, skins repeat in balanced rounds with a random hue shift (≥45°,
+ * or bounded by `options.maxHueShift`).
  *
  * @param paletteCount - Total number of available palettes (e.g., 6)
  * @param paletteCounts - Array of counts per palette (length must equal paletteCount)
- * @param optionsOrAllowed - Optional configuration object or allowed palette list
- * @param legacyMaxHueShift - Optional maxHueShift when allowed is passed positionally
+ * @param options - Optional palette restriction and hue shift bound
  * @returns Selected palette index and hue shift in degrees
  */
 export function pickDiversePalette(
   paletteCount: number,
   paletteCounts: number[],
-  optionsOrAllowed?: PalettePickOptions | readonly number[],
-  legacyMaxHueShift?: number,
+  options: PalettePickOptions = {},
 ): PalettePick {
   if (paletteCounts.length !== paletteCount) {
     throw new Error(
       `paletteCounts length (${paletteCounts.length}) must equal paletteCount (${paletteCount})`,
     );
-  }
-
-  let options: PalettePickOptions;
-  if (!optionsOrAllowed) {
-    options = {};
-  } else if (Array.isArray(optionsOrAllowed)) {
-    options = { allowed: optionsOrAllowed, maxHueShift: legacyMaxHueShift };
-  } else {
-    options = optionsOrAllowed as PalettePickOptions;
   }
 
   const allowed = options.allowed;
@@ -115,7 +115,7 @@ export function pickDiversePalette(
   const available = candidateIndices.filter((i) => paletteCounts[i] === minCount);
   const palette = available[Math.floor(Math.random() * available.length)];
 
-  // First round (minCount === 0): no hue shift. Subsequent rounds: hue shift.
+  // First round (minCount === 0): no hue shift. Subsequent rounds: random ≥45° (or bounded).
   let hueShift = 0;
   if (minCount > 0) {
     if (options.maxHueShift !== undefined && options.maxHueShift > 0) {

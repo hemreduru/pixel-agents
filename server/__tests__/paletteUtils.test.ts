@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getCleanFolderName,
+  getManagerPalette,
   MANAGER_FOLDER_CONFIG,
   pickDiversePalette,
   PROVIDER_MAX_HUE_SHIFT,
@@ -36,15 +37,6 @@ describe('paletteUtils', () => {
       const pick = pickDiversePalette(6, counts);
       expect(pick.hueShift).toBeGreaterThanOrEqual(45);
       expect(pick.hueShift).toBeLessThanOrEqual(315);
-    });
-
-    it('supports positional options (paletteCount, counts, allowed, maxHueShift)', () => {
-      const counts = [1, 1, 1, 1, 1, 1];
-      const allowed = [0, 3, 4]; // Antigravity cool palettes
-      const pick = pickDiversePalette(6, counts, allowed, 25);
-      expect(allowed).toContain(pick.palette);
-      expect(pick.hueShift).toBeGreaterThanOrEqual(1);
-      expect(pick.hueShift).toBeLessThanOrEqual(25);
     });
 
     it('throws when paletteCounts length does not match paletteCount', () => {
@@ -83,6 +75,18 @@ describe('paletteUtils', () => {
     it('returns undefined for undefined input', () => {
       expect(getCleanFolderName(undefined)).toBeUndefined();
       expect(getCleanFolderName('')).toBeUndefined();
+    });
+  });
+
+  describe('getManagerPalette', () => {
+    it('returns the fixed palette for a manager folder, by name or path', () => {
+      expect(getManagerPalette('workspace')).toEqual({ palette: 0, hueShift: 45 });
+      expect(getManagerPalette('/home/user/workspace')).toEqual({ palette: 0, hueShift: 45 });
+    });
+
+    it('returns undefined for other or missing folders', () => {
+      expect(getManagerPalette('my-project')).toBeUndefined();
+      expect(getManagerPalette(undefined)).toBeUndefined();
     });
   });
 

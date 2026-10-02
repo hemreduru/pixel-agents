@@ -1,14 +1,12 @@
 /**
- * Palette Assigner - Deterministic skin assignment for agents
+ * Server-side palette assignment helper.
  *
- * Runs once per agent at startup to pick a diverse, balanced character palette.
- * Stores assignments in the agent record (agent.palette / agent.hueShift) for
+ * Assigns palette and hueShift to agents when they're created, ensuring
  * consistent character appearance across all connected clients.
  */
 
 import {
-  getCleanFolderName,
-  MANAGER_FOLDER_CONFIG,
+  getManagerPalette,
   pickDiversePalette,
   PROVIDER_MAX_HUE_SHIFT,
   PROVIDER_PALETTES,
@@ -17,24 +15,37 @@ import type { AgentStateStore } from './agentStateStore.js';
 import { PALETTE_COUNT } from './constants.js';
 import type { AgentState } from './types.js';
 
+/**
+ * Runtime palette count. External asset directories can add char_N.png
+ * beyond the bundled 6 (loadExternalCharacterSprites accepts any N), so the
+ * count is dynamic. Defaults to PALETTE_COUNT until setPaletteCount is
+ * called after assets load. Mirrors the setHookProvider / setTeamSwitch
+ * module-level setter pattern in transcriptParser.ts.
+ */
 let currentPaletteCount = PALETTE_COUNT;
 
+/** Set the palette count after asset loading (standalone + VS Code). */
 export function setPaletteCount(count: number): void {
-  currentPaletteCount = count;
+  currentPaletteCount = Math.max(1, Math.floor(count));
 }
 
+/**
+ * Assign palette and hueShift to an agent if not already set.
+ * Uses the diversity algorithm to pick a palette that's least used among
+ * existing agents.
+ *
+ * @param agent - The agent to assign a palette to (mutated in place)
+ * @param store - The agent state store (used to count existing palettes)
+ */
 export function assignPaletteIfNeeded(agent: AgentState, store: AgentStateStore): void {
   if (agent.palette !== undefined) return;
 
   // Manager distinct look check (runs first, avoiding dead work)
-  const folderName = getCleanFolderName(agent.folderName);
-  if (folderName && MANAGER_FOLDER_CONFIG[folderName]) {
-    const manager = MANAGER_FOLDER_CONFIG[folderName];
-    if (manager.palette !== undefined) {
-      agent.palette = manager.palette;
-      agent.hueShift = manager.hueShift ?? 0;
-      return;
-    }
+  const manager = getManagerPalette(agent.folderName);
+  if (manager) {
+    agent.palette = manager.palette;
+    agent.hueShift = manager.hueShift;
+    return;
   }
 
   const count = currentPaletteCount;

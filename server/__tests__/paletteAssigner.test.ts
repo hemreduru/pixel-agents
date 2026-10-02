@@ -149,6 +149,17 @@ describe('paletteAssigner', () => {
   });
 
   describe('setPaletteCount', () => {
+    it('clamps non-positive and fractional counts to at least 1', () => {
+      setPaletteCount(0);
+      const agent = createTestAgent({ id: 1 });
+      assignPaletteIfNeeded(agent, store);
+      expect(agent.palette).toBe(0);
+      setPaletteCount(2.9);
+      const second = createTestAgent({ id: 2 });
+      assignPaletteIfNeeded(second, store);
+      expect([0, 1]).toContain(second.palette);
+    });
+
     it('picks from [0, N) when set above the default 6', () => {
       setPaletteCount(8);
       // Six agents get 0..5; the seventh must pick from [0, 8) -- if the
