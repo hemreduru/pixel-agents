@@ -37,6 +37,11 @@
   --color-status-success: #89d185;
   --color-status-error: var(--color-danger);
 
+  /* Provider badge */
+  --color-provider-claude: #d97757;
+  --color-provider-antigravity: #8b5cf6;
+  --color-provider-unknown: #9ca3af;
+
   /* Shadow */
   --shadow-pixel: 2px 2px 0px #0a0a14;
 
@@ -83,6 +88,9 @@
   --color-status-active: var(--color-status-active);
   --color-status-success: var(--color-status-success);
   --color-status-error: var(--color-status-error);
+  --color-provider-claude: var(--color-provider-claude);
+  --color-provider-antigravity: var(--color-provider-antigravity);
+  --color-provider-unknown: var(--color-provider-unknown);
 
   /* Shadow */
   --shadow-pixel: var(--shadow-pixel);

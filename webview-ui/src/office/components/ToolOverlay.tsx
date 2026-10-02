@@ -22,6 +22,8 @@ import type { OfficeState } from '../engine/officeState.js';
 import { overlayProjection } from '../projection.js';
 import type { ToolActivity } from '../types.js';
 import { CharacterState } from '../types.js';
+import { getAgentNameLabel } from './agentLabels.js';
+import { ProviderBadge } from './ProviderBadge.js';
 
 // Both turn-end states show the green checkmark bubble. A finished turn (Stop)
 // shows ONLY the checkmark (the label falls through to its normal idle text);
@@ -203,7 +205,7 @@ export function ToolOverlay({
 
         // Team info
         const teamRoleLabel = ch.isTeamLead ? 'LEAD' : ch.agentName || null;
-        const hasExtraLines = !!(ch.folderName || teamRoleLabel);
+        const hasExtraLines = !!(ch.folderName || ch.providerId || teamRoleLabel);
 
         // Context gauge. Every agent gets one — lead, teammate, adopted,
         // headless — as soon as it has taken a turn. Sub-agents never do: they
@@ -254,10 +256,15 @@ export function ToolOverlay({
                 >
                   {activityText}
                 </span>
-                {ch.folderName && (
-                  <span className="text-2xs leading-none overflow-hidden text-ellipsis block">
-                    {ch.folderName}
-                  </span>
+                {(ch.folderName || ch.providerId) && (
+                  <div className="flex items-center gap-2 mt-1">
+                    {ch.folderName && (
+                      <span className="text-2xs leading-none overflow-hidden text-ellipsis block text-text-muted">
+                        {getAgentNameLabel(ch.folderName)}
+                      </span>
+                    )}
+                    <ProviderBadge providerId={ch.providerId} model={ch.model} />
+                  </div>
                 )}
               </div>
               {isSelected && !isSub && (

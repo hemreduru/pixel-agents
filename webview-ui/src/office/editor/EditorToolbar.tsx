@@ -15,6 +15,7 @@ import {
   PET_THUMB_ZOOM,
 } from '../../constants.js';
 import { getColorizedSprite } from '../colorize.js';
+import { getAgentNameLabel } from '../components/agentLabels.js';
 import { getColorizedFloorSprite, getFloorPatternCount, hasFloorSprites } from '../floorTiles.js';
 import type { FurnitureCategory, LoadedAssetData } from '../layout/furnitureCatalog.js';
 import {
@@ -867,7 +868,7 @@ function AreaCard({
                 className="flex-1 text-xs text-text overflow-hidden text-ellipsis whitespace-nowrap"
                 title={folder}
               >
-                {folder}
+                {getAgentNameLabel(folder)}
               </span>
               <Button
                 variant="ghost"
