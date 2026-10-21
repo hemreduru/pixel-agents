@@ -120,7 +120,7 @@ export function handleClientMessage(
       if (msg.seats) {
         const seats = msg.seats as Record<
           string,
-          { palette?: number; hueShift?: number; seatId?: string }
+          { palette?: number; hueShift?: number; seatId?: string | null }
         >;
         // Sync palette/hueShift back to AgentState so existingAgents stays
         // consistent across reconnects. Validate ranges to keep a remote
@@ -130,7 +130,22 @@ export function handleClientMessage(
         // char_N.png beyond the bundled 6, so read the count from the asset
         // cache instead of hardcoding PALETTE_COUNT.
         const paletteCount = cache?.characters?.characters.length ?? PALETTE_COUNT;
+        const existingSeats = adapter?.loadSeats() ?? {};
+        const mergedSeats: Record<
+          string,
+          { palette?: number; hueShift?: number; seatId?: string }
+        > = {};
+        for (const [k, v] of Object.entries(existingSeats)) {
+          if (k.startsWith('worker:') || k.startsWith('record:')) {
+            mergedSeats[k] = v;
+          }
+        }
         for (const [idStr, meta] of Object.entries(seats)) {
+          mergedSeats[idStr] = {
+            palette: meta.palette,
+            hueShift: meta.hueShift,
+            seatId: meta.seatId ?? undefined,
+          };
           const id = Number(idStr);
           const agent = store.get(id);
           if (agent) {
@@ -150,9 +165,25 @@ export function handleClientMessage(
             ) {
               agent.hueShift = meta.hueShift;
             }
+            if (meta.seatId !== undefined) {
+              agent.seatId = meta.seatId ?? undefined;
+            }
+            if (agent.workerId) {
+              mergedSeats[`worker:${agent.workerId}`] = {
+                palette: agent.palette,
+                hueShift: agent.hueShift,
+                seatId: agent.seatId,
+              };
+            } else if (agent.acpxRecordId) {
+              mergedSeats[`record:${agent.acpxRecordId}`] = {
+                palette: agent.palette,
+                hueShift: agent.hueShift,
+                seatId: agent.seatId,
+              };
+            }
           }
         }
-        adapter?.saveSeats(seats);
+        adapter?.saveSeats(mergedSeats);
       }
       break;
 
@@ -416,7 +447,7 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
     lastSeenVersion: adapter?.getSetting(KEY_LAST_SEEN_VERSION, '') ?? '',
     extensionVersion: process.env.PIXEL_AGENTS_VERSION ?? '',
     watchAllSessions,
-    alwaysShowLabels: adapter?.getSetting(KEY_ALWAYS_SHOW_LABELS, false) ?? false,
+    alwaysShowLabels: adapter?.getSetting(KEY_ALWAYS_SHOW_LABELS, true) ?? true,
     ghostHeadlessAgents: adapter?.getSetting(KEY_GHOST_HEADLESS_AGENTS, false) ?? false,
     hooksEnabled,
     hooksInfoShown: adapter?.getSetting(KEY_HOOKS_INFO_SHOWN, false) ?? false,
@@ -491,6 +522,10 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
       providerId?: string;
       model?: string;
       agentName?: string;
+      workerId?: string;
+      taskLabel?: string;
+      lastToolStatus?: string;
+      isFinished?: boolean;
     }
   > = {};
   for (const [id, agent] of store) {
@@ -501,14 +536,20 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
     if (agent.isExternal) {
       externalAgents[id] = true;
     }
-    const persisted = persistedSeats[String(id)];
+    const persisted =
+      (agent.workerId ? persistedSeats[`worker:${agent.workerId}`] : undefined) ??
+      persistedSeats[String(id)];
     agentMeta[id] = {
       palette: agent.palette,
       hueShift: agent.hueShift,
-      seatId: persisted?.seatId,
+      seatId: persisted?.seatId ?? agent.seatId,
       providerId: agent.providerId ?? 'claude',
       model: agent.model,
       agentName: agent.isTeamLead || agent.leadAgentId !== undefined ? undefined : agent.agentName,
+      workerId: agent.workerId,
+      taskLabel: agent.taskLabel,
+      lastToolStatus: agent.lastToolStatus,
+      isFinished: agent.isFinished,
     };
   }
   send({

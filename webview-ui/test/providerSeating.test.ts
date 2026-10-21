@@ -81,3 +81,138 @@ test('providers without an Area keep the unzoned-first behavior', () => {
   os.addAgent(1, 0, 0, undefined, true, 'demo', undefined, 'openai');
   assert.ok([6, 7].includes(seatCol(os, 1)));
 });
+
+/**
+ * Multi-area office with workspace (2 seats), antigravity (4 seats),
+ * cursor (3 seats), claude (3 seats), and unzoned (2 seats).
+ */
+function multiAreaOffice(): OfficeState {
+  const areaTiles = [
+    'workspace',
+    'workspace',
+    'antigravity',
+    'antigravity',
+    'antigravity',
+    'antigravity',
+    'cursor',
+    'cursor',
+    'cursor',
+    'claude',
+    'claude',
+    'claude',
+    null,
+    null,
+  ];
+  const cols = areaTiles.length;
+  const layout: OfficeLayout = {
+    version: 1,
+    cols,
+    rows: 1,
+    tiles: new Array<TileType>(cols).fill(TileType.FLOOR_1),
+    furniture: [],
+    areaTiles,
+  };
+  const os = new OfficeState(layout);
+  for (let col = 0; col < cols; col++) {
+    const seat: Seat = {
+      uid: `s${col}`,
+      seatCol: col,
+      seatRow: 0,
+      facingDir: Direction.DOWN,
+      assigned: false,
+    };
+    os.seats.set(seat.uid, seat);
+  }
+  return os;
+}
+
+test('known workers and unknown agents get identical seatId, palette, and hueShift regardless of discovery order', () => {
+  const roster = [
+    { key: 'cuma-2', providerId: 'antigravity', agentName: 'cuma-2 · gemini-4-argon-high' },
+    { key: 'hasan-2', providerId: 'antigravity', agentName: 'hasan-2 · gemini-4-argon-high' },
+    { key: 'selim-yedek', providerId: 'claude', agentName: 'selim-yedek · agy-sonnet' },
+    { key: 'unknown', providerId: 'antigravity', agentName: 'unknown · gemini-4-argon-high' },
+  ];
+
+  const orders = [
+    ['cuma-2', 'hasan-2', 'selim-yedek', 'unknown'],
+    ['unknown', 'selim-yedek', 'hasan-2', 'cuma-2'],
+    ['selim-yedek', 'unknown', 'cuma-2', 'hasan-2'],
+  ];
+
+  const runOrder = (order: string[]) => {
+    const os = multiAreaOffice();
+    order.forEach((key, idx) => {
+      const item = roster.find((r) => r.key === key)!;
+      os.addAgent(
+        idx + 1,
+        undefined,
+        undefined,
+        undefined,
+        true,
+        'workspace',
+        undefined,
+        item.providerId,
+        item.agentName,
+      );
+    });
+
+    const result: Record<string, { seatId: string | null; palette: number; hueShift: number }> = {};
+    order.forEach((key, idx) => {
+      const ch = os.characters.get(idx + 1)!;
+      result[key] = {
+        seatId: ch.seatId,
+        palette: ch.palette,
+        hueShift: ch.hueShift,
+      };
+    });
+    return result;
+  };
+
+  const baseline = runOrder(orders[0]);
+  const reverse = runOrder(orders[1]);
+  const mixed = runOrder(orders[2]);
+
+  assert.deepEqual(reverse, baseline);
+  assert.deepEqual(mixed, baseline);
+
+  // Verify specific canonical slots in antigravity (s2=slot 0 for cuma, s3=slot 1 for hasan, s5=unreserved for unknown)
+  assert.equal(baseline['cuma-2'].seatId, 's2');
+  assert.equal(baseline['hasan-2'].seatId, 's3');
+  assert.equal(baseline['selim-yedek'].seatId, 's10');
+  assert.equal(baseline['unknown'].seatId, 's5');
+});
+
+test('aliases cuma, cuma-2, cuma-yedek, cuma-yedek-2 resolve to the same desk and character palette', () => {
+  const aliases = ['cuma', 'cuma-2', 'cuma-yedek', 'cuma-yedek-2'];
+  const snapshots = aliases.map((alias) => {
+    const os = multiAreaOffice();
+    os.addAgent(
+      1,
+      undefined,
+      undefined,
+      undefined,
+      true,
+      'workspace',
+      undefined,
+      'antigravity',
+      `${alias} · gemini-4-argon-high`,
+    );
+    const ch = os.characters.get(1)!;
+    return {
+      seatId: ch.seatId,
+      palette: ch.palette,
+      hueShift: ch.hueShift,
+      workerId: ch.workerId,
+    };
+  });
+
+  for (const snap of snapshots) {
+    assert.deepEqual(snap, {
+      seatId: 's2',
+      palette: 0,
+      hueShift: 0,
+      workerId: 'cuma',
+    });
+  }
+});

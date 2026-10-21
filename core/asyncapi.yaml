@@ -199,6 +199,21 @@ components:
         agentName:
           type: string
           description: Display name for non-team agents (e.g. `agy-pro · gemini-3.1-pro-high`).
+        seatId:
+          type: string
+          description: Preferred or persisted seat ID for this agent.
+        workerId:
+          type: string
+          description: Canonical worker identity (e.g. `cuma`, `hasan`, `selim`, `nuri`).
+        taskLabel:
+          type: string
+          description: Short summary or first line of the agent's current/last task.
+        lastToolStatus:
+          type: string
+          description: Most recent formatted tool activity status.
+        isFinished:
+          type: boolean
+          description: True when this agent mirrors a completed session on a persistent desk.
 
     AgentClosed:
       description: An agent has been removed from the office.
@@ -1098,6 +1113,18 @@ components:
         agentName:
           type: string
           description: Display name for non-team agents (e.g. `agy-pro · gemini-3.1-pro-high`).
+        workerId:
+          type: string
+          description: Canonical worker identity (e.g. `cuma`, `hasan`, `selim`, `nuri`).
+        taskLabel:
+          type: string
+          description: Short summary or first line of the agent's current/last task.
+        lastToolStatus:
+          type: string
+          description: Most recent formatted tool activity status.
+        isFinished:
+          type: boolean
+          description: True when this agent mirrors a completed session on a persistent desk.
 
     SeatAssignment:
       description: |

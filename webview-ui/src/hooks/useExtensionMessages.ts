@@ -140,7 +140,7 @@ export function useExtensionMessages(
   const [lastSeenVersion, setLastSeenVersion] = useState('');
   const [extensionVersion, setExtensionVersion] = useState('');
   const [watchAllSessions, setWatchAllSessions] = useState(false);
-  const [alwaysShowLabels, setAlwaysShowLabels] = useState(false);
+  const [alwaysShowLabels, setAlwaysShowLabels] = useState(true);
   const [ghostHeadlessAgents, setGhostHeadlessAgentsState] = useState(false);
   const [hooksEnabled, setHooksEnabled] = useState(true);
   const [hooksInstalled, setHooksInstalled] = useState<Record<string, boolean>>({});
@@ -241,6 +241,7 @@ export function useExtensionMessages(
             p.folderName,
             undefined,
             p.info?.providerId,
+            p.info?.agentName,
           );
           if (p.isHeadless) os.setHeadless(p.id, true);
           if (p.info) os.setAgentInfo(p.id, p.info);
@@ -293,15 +294,18 @@ export function useExtensionMessages(
         } else {
           const palette = msg.palette as number | undefined;
           const hueShift = msg.hueShift as number | undefined;
+          const seatId = msg.seatId as string | undefined;
+          const agentName = msg.agentName as string | undefined;
           os.addAgent(
             id,
             palette,
             hueShift,
-            undefined,
+            seatId,
             undefined,
             folderName,
             undefined,
             msg.providerId as string | undefined,
+            agentName,
           );
           noteFolderName(folderName);
           if (isHeadlessAgent(msg.isExternal as boolean | undefined)) {
@@ -310,7 +314,11 @@ export function useExtensionMessages(
           os.setAgentInfo(id, {
             providerId: msg.providerId as string | undefined,
             model: msg.model as string | undefined,
-            agentName: msg.agentName as string | undefined,
+            agentName,
+            workerId: msg.workerId as string | undefined,
+            taskLabel: msg.taskLabel as string | undefined,
+            lastToolStatus: msg.lastToolStatus as string | undefined,
+            isFinished: msg.isFinished as boolean | undefined,
           });
         }
         saveAgentSeats(os);
@@ -397,6 +405,7 @@ export function useExtensionMessages(
         const toolName = (msg.toolName as string | undefined) ?? extractToolName(status);
         os.setAgentTool(id, toolName);
         os.setAgentActive(id, true);
+        os.setAgentInfo(id, { lastToolStatus: status, isFinished: false });
         // Don't clear the permission bubble if the hook already confirmed permission is needed
         if (!permissionActive) {
           os.clearPermissionBubble(id);

@@ -161,6 +161,10 @@ export function updateCharacter(
         }
         break;
       }
+      // Persistent named desk workers and finished sessions stay at their desk in idle state
+      if (ch.isFinished || ch.workerId) {
+        break;
+      }
       // Countdown wander timer
       ch.wanderTimer -= dt;
       if (ch.wanderTimer <= 0) {

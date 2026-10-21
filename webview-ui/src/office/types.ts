@@ -231,6 +231,14 @@ export interface Character {
   providerId?: string;
   /** Model the agent runs on, when known */
   model?: string;
+  /** Canonical worker identifier (`cuma`, `hasan`, `selim`, `nuri`, ...) when resolved */
+  workerId?: string;
+  /** Current or last task/objective summary for this agent */
+  taskLabel?: string;
+  /** Last completed or active tool status string */
+  lastToolStatus?: string;
+  /** True when the session has completed/exited (`closed` / `exited`) and is now idle at its desk */
+  isFinished?: boolean;
   /** The first-run consent greeter. A MARKER, not a gate: the greeter lives in
    *  OfficeState.greeter, outside the agent map, so seat assignment, palette
    *  diversity, the FSM, hit-testing and seat persistence never see it — no

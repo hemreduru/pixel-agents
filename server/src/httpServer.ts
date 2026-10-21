@@ -185,6 +185,11 @@ function registerWebSocketRoute(app: FastifyInstance, options: HttpServerOptions
         agentName: agent.agentName,
         providerId: agent.providerId ?? 'claude',
         model: agent.model,
+        seatId: agent.seatId,
+        workerId: agent.workerId,
+        taskLabel: agent.taskLabel,
+        lastToolStatus: agent.lastToolStatus,
+        isFinished: agent.isFinished,
       });
     };
 

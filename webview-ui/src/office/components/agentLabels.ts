@@ -1,4 +1,5 @@
 import { getCleanFolderName, MANAGER_FOLDER_CONFIG } from '../../../../core/src/paletteUtils.js';
+import { resolveWorkerIdentity } from '../../../../core/src/workerIdentity.js';
 
 export function getAgentNameLabel(folderName?: string): string | undefined {
   if (!folderName) return undefined;
@@ -56,4 +57,81 @@ export function getAgentShortName(providerId: string, model?: string, folderName
   const managerLabel = MANAGER_FOLDER_CONFIG[getCleanFolderName(folderName) ?? '']?.label;
   if (managerLabel) return managerLabel;
   return model ? formatModelName(model) : getProviderDisplayName(providerId);
+}
+
+export interface AgentDeskDisplay {
+  workerId?: string;
+  isKnownWorker: boolean;
+  displayName: string;
+  badges: string[];
+  modelLabel?: string;
+  taskText?: string;
+  activityText: string;
+  tooltip: string;
+}
+
+export interface AgentDeskDisplayInput {
+  agentName?: string;
+  folderName?: string;
+  providerId?: string;
+  model?: string;
+  taskLabel?: string;
+  lastToolStatus?: string;
+  isFinished?: boolean;
+  activeToolStatus?: string;
+  isActive?: boolean;
+  bubbleType?: 'permission' | 'waiting' | null;
+  waitingAwaitingInput?: boolean;
+}
+
+/**
+ * Compute structured desk card display fields for a character:
+ * canonical person name, variant badges (`yedek`, `hesap 2`), model label,
+ * task summary, live/idle activity status, and full tooltip.
+ */
+export function getAgentDeskDisplay(input: AgentDeskDisplayInput): AgentDeskDisplay {
+  const identity = resolveWorkerIdentity(input.agentName, input.folderName);
+  const displayName = identity.displayName;
+  const badges = identity.badges;
+  const modelLabel = input.providerId
+    ? getAgentTitle(input.providerId, input.model)
+    : input.model
+      ? formatModelName(input.model)
+      : undefined;
+  const taskText = input.taskLabel?.trim() || undefined;
+
+  let activityText: string;
+  if (input.bubbleType === 'permission') {
+    activityText = 'Needs approval';
+  } else if (input.bubbleType === 'waiting' && input.waitingAwaitingInput) {
+    activityText = 'Waiting for input';
+  } else if (input.activeToolStatus && !input.isFinished) {
+    activityText = input.activeToolStatus;
+  } else if (input.isFinished) {
+    activityText = input.lastToolStatus ? `Idle · ${input.lastToolStatus}` : 'Idle · Finished';
+  } else if (input.lastToolStatus) {
+    activityText = input.isActive ? input.lastToolStatus : `Idle · ${input.lastToolStatus}`;
+  } else {
+    activityText = 'Idle';
+  }
+
+  const tooltipParts = [
+    displayName,
+    ...badges,
+    modelLabel,
+    input.isFinished ? 'Finished (Idle)' : undefined,
+    taskText,
+    input.activeToolStatus ?? input.lastToolStatus,
+  ].filter((part): part is string => Boolean(part && part.trim()));
+
+  return {
+    workerId: identity.workerId,
+    isKnownWorker: identity.isKnownWorker,
+    displayName,
+    badges,
+    modelLabel,
+    taskText,
+    activityText,
+    tooltip: tooltipParts.join(' · '),
+  };
 }

@@ -80,6 +80,11 @@ export interface AgentCreated {
   providerId?: string;
   model?: string;
   agentName?: string;
+  seatId?: string;
+  workerId?: string;
+  taskLabel?: string;
+  lastToolStatus?: string;
+  isFinished?: boolean;
 }
 
 export interface AgentClosed {
@@ -107,6 +112,10 @@ export interface AgentSeatMeta {
   providerId?: string;
   model?: string;
   agentName?: string;
+  workerId?: string;
+  taskLabel?: string;
+  lastToolStatus?: string;
+  isFinished?: boolean;
 }
 
 export interface AgentStatus {
