@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AcpxWatcher, parseAcpxRecord } from '../src/acpxWatcher.js';
+import { AcpxWatcher, extractAcpxTaskSummary, parseAcpxRecord } from '../src/acpxWatcher.js';
 import { AgentStateStore } from '../src/agentStateStore.js';
 import { ACPX_SCAN_INTERVAL_MS } from '../src/constants.js';
 
@@ -80,6 +80,88 @@ describe('parseAcpxRecord', () => {
   it('rejects other schemas and garbage', () => {
     expect(parseAcpxRecord({ schema: 'other' })).toBeNull();
     expect(parseAcpxRecord(null)).toBeNull();
+  });
+
+  it('detects Claude provider when agent_command or agent_argv contains claude', () => {
+    const s = parseAcpxRecord(
+      record('selim-yedek', 'node /home/nuri/.openclaw/bin/claude-agent-acp-wrapper.mjs', [
+        'node',
+        '/home/nuri/.openclaw/bin/claude-agent-acp-wrapper.mjs',
+        '-m',
+        'claude-opus-4-7',
+      ]),
+    )!;
+    expect(s.providerId).toBe('claude');
+    expect(s.model).toBe('claude-opus-4-7');
+  });
+
+  it('extracts taskLabel stripping boilerplate and generic markdown headings', () => {
+    const summary1 = extractAcpxTaskSummary([
+      {
+        User: {
+          content: [
+            {
+              Text: 'İlk iş /home/nuri/.openclaw/workspace/ekip/cuma.md dosyasını oku ve uy.\n\n## Bağlam\n## Görev\n# Task: Fix Persistent Named Desks in Pixel Agents\nMore details here.',
+            },
+          ],
+        },
+      },
+    ]);
+    expect(summary1).toBe('Fix Persistent Named Desks in Pixel Agents');
+
+    const summary2 = extractAcpxTaskSummary([
+      {
+        User: {
+          content: [
+            {
+              Text: '<USER_REQUEST>\nFirst read /home/nuri/.openclaw/workspace/ekip/selim.md and follow it.\n## Context\nImplement OAuth PKCE flow for mobile clients\n</USER_REQUEST>',
+            },
+          ],
+        },
+      },
+    ]);
+    expect(summary2).toBe('Implement OAuth PKCE flow for mobile clients');
+  });
+
+  it('derives lastToolStatus even when the final Agent message only has Text', () => {
+    const s = parseAcpxRecord({
+      schema: 'acpx.session.v1',
+      acpx_record_id: 'agent:selim-yedek:acp:1:oneshot:2',
+      agent_command: 'claude-agent-acp-wrapper.mjs',
+      agent_argv: ['claude-agent-acp-wrapper.mjs'],
+      cwd: '/home/nuri/.openclaw/workspace',
+      closed: true,
+      updated_at: '2026-01-01T10:00:10.000Z',
+      messages: [
+        {
+          User: {
+            content: [{ Text: 'Görev: Audit server auth routes' }],
+          },
+        },
+        {
+          Agent: {
+            content: [
+              {
+                ToolUse: {
+                  id: 't1',
+                  name: 'Executing read_file',
+                  input: { file_path: '/srv/app/auth.ts' },
+                },
+              },
+            ],
+            tool_results: { t1: { tool_use_id: 't1' } },
+          },
+        },
+        {
+          Agent: {
+            content: [{ Text: 'All auth routes look solid.' }],
+          },
+        },
+      ],
+    })!;
+    expect(s.taskLabel).toBe('Audit server auth routes');
+    expect(s.tools).toEqual([]);
+    expect(s.lastToolStatus).toContain('Reading');
   });
 });
 
@@ -238,5 +320,142 @@ describe('AcpxWatcher lifecycle', () => {
     vi.advanceTimersByTime(ACPX_SCAN_INTERVAL_MS);
     expect(store.size).toBe(1);
     w.dispose();
+  });
+
+  it('retains finished known-worker sessions in idle/finished state instead of dropping them', () => {
+    write('selim.json', {
+      acpx_record_id: 'agent:selim-yedek:acp:111:oneshot:222',
+      agent_command: 'claude-agent-acp-wrapper.mjs',
+      agent_argv: ['claude-agent-acp-wrapper.mjs', '-m', 'claude-opus-4-7'],
+      cwd: '/home/nuri/.openclaw/workspace',
+      closed: true,
+      messages: [
+        {
+          User: {
+            content: [
+              {
+                Text: 'İlk iş /home/nuri/.openclaw/workspace/ekip/selim.md dosyasını oku ve uy.\n\nGörev: Check database indexes',
+              },
+            ],
+          },
+        },
+        {
+          Agent: {
+            content: [
+              {
+                ToolUse: {
+                  id: 't1',
+                  name: 'Executing run_command',
+                  input: { command: 'psql -c "\\d"' },
+                },
+              },
+            ],
+            tool_results: { t1: { tool_use_id: 't1' } },
+          },
+        },
+        {
+          Agent: {
+            content: [{ Text: 'Done checking indexes.' }],
+          },
+        },
+      ],
+    });
+
+    watcher.scan();
+    expect(store.size).toBe(1);
+    const agent = [...store.values()][0];
+    expect(agent.workerId).toBe('selim');
+    expect(agent.isWaiting).toBe(true);
+    expect(agent.isFinished).toBe(true);
+    expect(agent.taskLabel).toBe('Check database indexes');
+    expect(agent.lastToolStatus).toBeDefined();
+    expect(agent.folderName).toBeUndefined();
+    expect(removed).toEqual([]);
+  });
+
+  it('transitions an active known worker to finished/idle without removing its desk agent', () => {
+    write('hasan.json', {
+      acpx_record_id: 'agent:hasan:acp:111:oneshot:222',
+      cwd: '/home/nuri/.openclaw/workspace',
+      closed: false,
+      messages: [
+        { User: { content: [{ Text: 'Görev: Build pixel desk sprites' }] } },
+        {
+          Agent: {
+            content: [{ ToolUse: { id: 'h1', name: 'Executing run_command', input: {} } }],
+            tool_results: {},
+          },
+        },
+      ],
+    });
+    watcher.scan();
+    expect(store.size).toBe(1);
+    const agent = [...store.values()][0];
+    expect(agent.workerId).toBe('hasan');
+    expect(agent.isFinished).toBe(false);
+    expect(agent.activeToolIds.has('h1')).toBe(true);
+
+    write('hasan.json', {
+      acpx_record_id: 'agent:hasan:acp:111:oneshot:222',
+      cwd: '/home/nuri/.openclaw/workspace',
+      closed: true,
+      messages: [
+        { User: { content: [{ Text: 'Görev: Build pixel desk sprites' }] } },
+        {
+          Agent: {
+            content: [{ ToolUse: { id: 'h1', name: 'Executing run_command', input: {} } }],
+            tool_results: { h1: { tool_use_id: 'h1' } },
+          },
+        },
+      ],
+    });
+    watcher.scan();
+    expect(removed).toEqual([]);
+    expect(store.size).toBe(1);
+    expect(agent.isWaiting).toBe(true);
+    expect(agent.isFinished).toBe(true);
+    expect(agent.activeToolIds.size).toBe(0);
+    expect(
+      sent.some((m) => m.type === 'agentStatus' && m.id === agent.id && m.status === 'waiting'),
+    ).toBe(true);
+  });
+
+  it('consolidates multiple alias sessions for the same workerId into a single agent', () => {
+    write('cuma-old.json', {
+      acpx_record_id: 'agent:cuma:acp:100:oneshot:200',
+      cwd: '/home/nuri/.openclaw/workspace',
+      closed: true,
+      updated_at: '2026-01-01T10:00:00.000Z',
+      messages: [{ User: { content: [{ Text: 'Old task' }] } }],
+    });
+    watcher.scan();
+    expect(store.size).toBe(1);
+    const firstAgent = [...store.values()][0];
+    const originalId = firstAgent.id;
+    const originalSeat = firstAgent.seatId;
+    const originalPalette = firstAgent.palette;
+    expect(firstAgent.workerId).toBe('cuma');
+    expect(firstAgent.isFinished).toBe(true);
+    expect(firstAgent.taskLabel).toBe('Old task');
+
+    // Now cuma-2 starts an active session in another file while cuma-old.json remains on disk
+    write('cuma-2-active.json', {
+      acpx_record_id: 'agent:cuma-2:acp:300:oneshot:400',
+      cwd: '/home/nuri/.openclaw/workspace',
+      closed: false,
+      updated_at: '2026-01-01T09:00:00.000Z', // even if timestamp is older, active beats closed!
+      messages: [{ User: { content: [{ Text: 'Active task on account 2' }] } }],
+    });
+    watcher.scan();
+
+    expect(store.size).toBe(1);
+    const updatedAgent = store.get(originalId)!;
+    expect(updatedAgent).toBeDefined();
+    expect(updatedAgent.id).toBe(originalId);
+    expect(updatedAgent.seatId).toBe(originalSeat);
+    expect(updatedAgent.palette).toBe(originalPalette);
+    expect(updatedAgent.isFinished).toBe(false);
+    expect(updatedAgent.agentName).toContain('cuma-2');
+    expect(updatedAgent.taskLabel).toBe('Active task on account 2');
   });
 });

@@ -24,7 +24,7 @@ import type { OfficeState } from '../engine/officeState.js';
 import { overlayProjection } from '../projection.js';
 import type { Character, ToolActivity } from '../types.js';
 import { CharacterState } from '../types.js';
-import { getAgentNameLabel, getAgentShortName, getAgentTitle } from './agentLabels.js';
+import { getAgentDeskDisplay } from './agentLabels.js';
 import { stackLabels } from './labelStacking.js';
 import { ProviderBadge } from './ProviderBadge.js';
 
@@ -143,21 +143,24 @@ export function ToolOverlay({
   // All character IDs
   const allIds = [...agents, ...subagentCharacters.map((s) => s.id)];
 
-  // Labels that are merely "always shown" must not cover each other: stack colliding
-  // ones upward. The focused (hovered/selected) label stays put, on top.
+  // Labels that are shown simultaneously must not cover each other or the character sprite:
+  // anchor each label's bottom edge just above screenY and stack colliding ones upward.
   const stackable = allIds.flatMap((id) => {
     const ch = officeState.characters.get(id);
-    if (!ch || !alwaysShowOverlay || id === selectedId || id === hoveredId) return [];
-    if (ch.bubbleType === 'waiting' && !ch.waitingAwaitingInput) return []; // checkmark only
+    if (!ch) return [];
+    const isSel = selectedId === id;
+    const isHov = hoveredId === id;
+    if (!alwaysShowOverlay && !isSel && !isHov) return [];
+    if (ch.isSubagent && ch.bubbleType === 'waiting' && !ch.waitingAwaitingInput) return [];
     const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0;
-    const size = sizes.current.get(id) ?? { width: 0, height: OVERLAY_COMPACT_HEIGHT_PX };
+    const defaultHeight = ch.isSubagent ? OVERLAY_COMPACT_HEIGHT_PX : 68;
+    const size = sizes.current.get(id) ?? { width: 160, height: defaultHeight };
+    const anchorY = project.toScreenY(ch.y + sittingOffset - TOOL_OVERLAY_VERTICAL_OFFSET);
     return [
       {
         id,
         x: project.toScreenX(ch.x),
-        top:
-          project.toScreenY(ch.y + sittingOffset - TOOL_OVERLAY_VERTICAL_OFFSET) -
-          (isProviderNamed(ch) ? OVERLAY_COMPACT_HEIGHT_PX : FULL_LABEL_TOP_OFFSET_PX),
+        top: anchorY - size.height - 4,
         ...size,
       },
     ];
@@ -184,111 +187,128 @@ export function ToolOverlay({
         const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0;
         const screenX = project.toScreenX(ch.x);
         const screenY = project.toScreenY(ch.y + sittingOffset - TOOL_OVERLAY_VERTICAL_OFFSET);
-
-        // A "Done" agent (finished turn: waiting bubble without awaitingInput)
-        // shows ONLY its floating green checkmark bubble, never the label panel
-        // (the panel would cover the bubble). Render an empty positioned marker
-        // so overlay counts stay stable and hover/select can still bring the
-        // panel back. When always-show is off, the early return above already
-        // keeps the panel hidden for idle agents.
-        const isDone = ch.bubbleType === 'waiting' && !ch.waitingAwaitingInput;
-        if (isDone && !isSelected && !isHovered) {
-          return (
-            <div
-              key={id}
-              className="absolute"
-              style={{ left: screenX, top: screenY, pointerEvents: 'none' }}
-              data-testid="agent-overlay"
-              data-agent-id={id}
-            />
-          );
-        }
-
-        // Provider-named agents that are only "always shown" get a one-line label:
-        // badge + short name. Hover/select brings back the full label.
         const stackOffset = stackOffsets.get(id) ?? 0;
-        if (isProviderNamed(ch) && !isSelected && !isHovered) {
+
+        // Sub-agents render a compact italic subtask pill
+        if (isSub) {
+          const isDone = ch.bubbleType === 'waiting' && !ch.waitingAwaitingInput;
+          if (isDone && !isSelected && !isHovered) {
+            return (
+              <div
+                key={id}
+                className="absolute"
+                style={{ left: screenX, top: screenY, pointerEvents: 'none' }}
+                data-testid="agent-overlay"
+                data-agent-id={id}
+              />
+            );
+          }
+          const subHasPermission = ch.bubbleType === 'permission';
+          let subActivityText: string;
+          if (ch.bubbleType === 'waiting' && ch.waitingAwaitingInput) {
+            subActivityText = WAITING_INPUT_ACTIVITY_TEXT;
+          } else if (subHasPermission) {
+            subActivityText = 'Needs approval';
+          } else {
+            const sub = subagentCharacters.find((s) => s.id === id);
+            const rows = sub ? subagentTools[sub.parentAgentId]?.[sub.parentToolId] : undefined;
+            const activeRow =
+              isSelected && rows ? [...rows].reverse().find((t) => !t.done) : undefined;
+            subActivityText = activeRow?.status ?? (sub?.label || 'Subtask');
+          }
           return (
             <div
               key={id}
               ref={(node) => measure(id, node)}
-              className="absolute -translate-x-1/2"
+              className="absolute flex flex-col items-center -translate-x-1/2"
               style={{
                 left: screenX,
-                top: screenY - OVERLAY_COMPACT_HEIGHT_PX - stackOffset,
-                pointerEvents: 'none',
-                opacity: 0.85,
-                zIndex: 41,
+                top: screenY - FULL_LABEL_TOP_OFFSET_PX - stackOffset,
+                pointerEvents: isSelected ? 'auto' : 'none',
+                opacity: alwaysShowOverlay && !isSelected && !isHovered ? 0.5 : 1,
+                zIndex: isSelected ? 42 : 41,
               }}
               data-testid="agent-overlay"
               data-agent-id={id}
             >
-              <div className="flex pixel-panel border-border px-6 py-2 whitespace-nowrap">
-                <ProviderBadge
-                  providerId={ch.providerId}
-                  model={ch.model}
-                  label={getAgentShortName(ch.providerId!, ch.model, ch.folderName)}
-                  className="text-xs"
-                />
+              <div className="flex items-center border-border px-8 pt-2 pb-4 gap-5 pixel-panel whitespace-nowrap max-w-2xs">
+                {subHasPermission && (
+                  <span
+                    className="w-6 h-6 rounded-full shrink-0"
+                    style={{ background: 'var(--color-status-permission)' }}
+                  />
+                )}
+                <span
+                  className="overflow-hidden text-ellipsis block leading-none"
+                  style={{ fontSize: '20px', fontStyle: 'italic' }}
+                >
+                  {subActivityText}
+                </span>
               </div>
             </div>
           );
         }
 
-        // Get activity text
-        const hasWaitingBubble = ch.bubbleType === 'waiting';
-        const subHasPermission = isSub && ch.bubbleType === 'permission';
-        let activityText: string;
-        if (hasWaitingBubble && ch.waitingAwaitingInput) {
-          // Idle, waiting on the user -> dedicated label. A finished turn (Stop)
-          // shows only the checkmark and falls through to the normal idle text.
-          activityText = WAITING_INPUT_ACTIVITY_TEXT;
-        } else if (isSub) {
-          if (subHasPermission) {
-            activityText = 'Needs approval';
-          } else {
-            // Hover shows the subtask title; SELECTING the sub reveals its live
-            // tool activity (watched sub-agents stream it via subagentToolStart).
-            const sub = subagentCharacters.find((s) => s.id === id);
-            const rows = sub ? subagentTools[sub.parentAgentId]?.[sub.parentToolId] : undefined;
-            const activeRow =
-              isSelected && rows ? [...rows].reverse().find((t) => !t.done) : undefined;
-            activityText = activeRow?.status ?? (sub?.label || 'Subtask');
-          }
-        } else {
-          activityText = getActivityText(
-            id,
-            agentTools,
-            ch.isActive,
-            ch.bubbleType,
-            ch.waitingAwaitingInput ?? false,
-          );
-        }
-
-        // Determine dot color
+        // Top-level / desk character card
         const tools = agentTools[id];
-        const hasPermission = subHasPermission || tools?.some((t) => t.permissionWait && !t.done);
-        const hasActiveTools = tools?.some((t) => !t.done);
-        const isActive = ch.isActive;
-        const hasWaiting = ch.bubbleType === 'waiting';
+        const activeTool = tools ? [...tools].reverse().find((t) => !t.done) : undefined;
+        const lastRecordedTool = tools && tools.length > 0 ? tools[tools.length - 1] : undefined;
+        const hasPermission =
+          ch.bubbleType === 'permission' ||
+          Boolean(tools?.some((t) => t.permissionWait && !t.done));
+        const hasWaitingInput = ch.bubbleType === 'waiting' && Boolean(ch.waitingAwaitingInput);
+        const activeToolStatus = hasPermission
+          ? 'Needs approval'
+          : (activeTool?.status ??
+            (ch.isActive && !ch.isFinished
+              ? (lastRecordedTool?.status ??
+                getActivityText(
+                  id,
+                  agentTools,
+                  ch.isActive,
+                  ch.bubbleType,
+                  ch.waitingAwaitingInput ?? false,
+                ))
+              : undefined));
 
-        let dotColor: string | null = null;
-        if (hasPermission || hasWaiting) {
+        const deskDisplay = getAgentDeskDisplay({
+          agentName: ch.agentName,
+          folderName: ch.folderName,
+          providerId: ch.providerId,
+          model: ch.model,
+          taskLabel: ch.taskLabel,
+          lastToolStatus: ch.lastToolStatus ?? lastRecordedTool?.status,
+          isFinished: ch.isFinished,
+          activeToolStatus: activeToolStatus === 'Idle' ? undefined : activeToolStatus,
+          isActive: ch.isActive,
+          bubbleType: hasPermission ? 'permission' : ch.bubbleType,
+          waitingAwaitingInput: ch.waitingAwaitingInput,
+        });
+
+        const isActivelyWorking = Boolean(
+          ch.isActive && !ch.isFinished && (activeTool || activeToolStatus),
+        );
+        let dotColor = 'var(--color-text-muted)';
+        if (hasPermission || hasWaitingInput) {
           dotColor = 'var(--color-status-permission)';
-        } else if (isActive && hasActiveTools) {
+        } else if (isActivelyWorking) {
           dotColor = 'var(--color-status-active)';
         }
 
-        // Team info
         const providerNamed = isProviderNamed(ch);
         const teamRoleLabel = ch.isTeamLead ? 'LEAD' : providerNamed ? null : ch.agentName || null;
-        const hasExtraLines = !!(ch.folderName || ch.providerId || teamRoleLabel);
+        const showTeamRoleLabel = Boolean(
+          teamRoleLabel && (ch.isTeamLead || ch.leadAgentId !== undefined),
+        );
+        const hasExtraLines = Boolean(
+          ch.providerId || ch.model || deskDisplay.taskText || showTeamRoleLabel,
+        );
 
-        // Context gauge. Every agent gets one — lead, teammate, adopted,
-        // headless — as soon as it has taken a turn. Sub-agents never do: they
-        // have no session of their own, so contextTokens stays 0.
+        const measuredHeight =
+          sizes.current.get(id)?.height ?? (hasExtraLines ? 68 : FULL_LABEL_TOP_OFFSET_PX);
+
         const contextRatio = ch.contextTokens / ch.maxContextTokens;
-        const showContextGauge = !isSub && ch.contextTokens > 0;
+        const showContextGauge = ch.contextTokens > 0;
 
         return (
           <div
@@ -297,31 +317,25 @@ export function ToolOverlay({
             className="absolute flex flex-col items-center -translate-x-1/2"
             style={{
               left: screenX,
-              top: screenY - (hasExtraLines ? 34 : FULL_LABEL_TOP_OFFSET_PX) - stackOffset,
+              top: screenY - measuredHeight - 4 - stackOffset,
               pointerEvents: isSelected ? 'auto' : 'none',
-              opacity: alwaysShowOverlay && !isSelected && !isHovered ? (isSub ? 0.5 : 0.75) : 1,
+              opacity: alwaysShowOverlay && !isSelected && !isHovered ? 0.92 : 1,
               zIndex: isSelected ? 42 : 41,
             }}
+            title={deskDisplay.tooltip}
             data-testid="agent-overlay"
             data-agent-id={id}
           >
-            <div className="flex items-center border-border px-8 pt-2 pb-4 gap-5 pixel-panel whitespace-nowrap max-w-2xs">
-              {dotColor && (
-                <span
-                  className={`w-6 h-6 rounded-full shrink-0 ${isActive && !hasPermission && !hasWaiting ? 'pixel-pulse' : ''}`}
-                  style={{ background: dotColor }}
-                />
-              )}
-              <div className="flex flex-col gap-0 overflow-hidden">
-                {providerNamed && (
-                  <ProviderBadge
-                    providerId={ch.providerId}
-                    model={ch.model}
-                    label={getAgentTitle(ch.providerId!, ch.model)}
-                    className="text-xs"
-                  />
-                )}
-                {teamRoleLabel && (
+            <div
+              className="flex items-center border-border px-8 pt-3 pb-4 gap-5 pixel-panel whitespace-nowrap max-w-xs"
+              title={deskDisplay.tooltip}
+            >
+              <span
+                className={`w-6 h-6 rounded-full shrink-0 ${isActivelyWorking && !hasPermission && !hasWaitingInput ? 'pixel-pulse' : ''}`}
+                style={{ background: dotColor }}
+              />
+              <div className="flex flex-col gap-1 overflow-hidden">
+                {showTeamRoleLabel && (
                   <span
                     className="overflow-hidden text-ellipsis block leading-none"
                     style={{
@@ -333,29 +347,50 @@ export function ToolOverlay({
                     {teamRoleLabel}
                   </span>
                 )}
-                <span
-                  className="overflow-hidden text-ellipsis block leading-none"
-                  style={{
-                    fontSize: isSub ? '20px' : '22px',
-                    fontStyle: isSub ? 'italic' : undefined,
-                  }}
-                >
-                  {activityText}
-                </span>
-                {(ch.folderName || ch.providerId) && (
-                  <div className="flex items-center gap-2 mt-1">
-                    {ch.folderName && (
-                      <span className="text-2xs leading-none overflow-hidden text-ellipsis block text-text-muted">
-                        {getAgentNameLabel(ch.folderName)}
-                      </span>
-                    )}
-                    {!providerNamed && (
-                      <ProviderBadge providerId={ch.providerId} model={ch.model} />
-                    )}
+                <div className="flex items-center gap-3 leading-none">
+                  <span
+                    data-testid="agent-name-label"
+                    className="text-xs font-bold text-text leading-none"
+                  >
+                    {deskDisplay.displayName}
+                  </span>
+                  {deskDisplay.badges.map((badge) => (
+                    <span
+                      key={badge}
+                      data-testid="agent-variant-badge"
+                      title={deskDisplay.tooltip}
+                      className="px-4 py-1 text-2xs bg-bg-dark text-accent-bright border border-border leading-none"
+                    >
+                      {badge}
+                    </span>
+                  ))}
+                </div>
+                {(ch.providerId || ch.model) && (
+                  <div className="flex items-center gap-2 leading-none">
+                    <ProviderBadge
+                      providerId={ch.providerId}
+                      model={ch.model}
+                      label={deskDisplay.modelLabel}
+                      className="text-2xs"
+                    />
                   </div>
                 )}
+                {deskDisplay.taskText && (
+                  <span
+                    data-testid="agent-task-label"
+                    className="text-2xs text-text overflow-hidden text-ellipsis block leading-tight max-w-[220px]"
+                  >
+                    {deskDisplay.taskText}
+                  </span>
+                )}
+                <span
+                  data-testid="agent-activity-label"
+                  className="text-2xs text-text-muted overflow-hidden text-ellipsis block leading-tight max-w-[220px]"
+                >
+                  {deskDisplay.activityText}
+                </span>
               </div>
-              {isSelected && !isSub && (
+              {isSelected && (
                 <Button
                   variant="ghost"
                   size="icon"

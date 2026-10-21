@@ -11,6 +11,7 @@ import {
   PROVIDER_MAX_HUE_SHIFT,
   PROVIDER_PALETTES,
 } from '../../core/src/paletteUtils.js';
+import { resolveWorkerIdentity } from '../../core/src/workerIdentity.js';
 import type { AgentStateStore } from './agentStateStore.js';
 import { PALETTE_COUNT } from './constants.js';
 import type { AgentState } from './types.js';
@@ -38,14 +39,28 @@ export function setPaletteCount(count: number): void {
  * @param store - The agent state store (used to count existing palettes)
  */
 export function assignPaletteIfNeeded(agent: AgentState, store: AgentStateStore): void {
+  const identity = resolveWorkerIdentity(agent.agentName ?? agent.acpxRecordId, agent.folderName);
+  if (identity.isKnownWorker) {
+    if (!agent.workerId && identity.workerId) agent.workerId = identity.workerId;
+    if (!agent.seatId && identity.defaultSeatId) agent.seatId = identity.defaultSeatId;
+  }
+
   if (agent.palette !== undefined) return;
 
-  // Manager distinct look check (runs first, avoiding dead work)
-  const manager = getManagerPalette(agent.folderName);
-  if (manager) {
-    agent.palette = manager.palette;
-    agent.hueShift = manager.hueShift;
+  if (identity.isKnownWorker && identity.palette !== undefined) {
+    agent.palette = identity.palette;
+    agent.hueShift = identity.hueShift ?? 0;
     return;
+  }
+
+  // Manager distinct look check (only when no explicit agent identifier was given)
+  if (!agent.agentName && !agent.acpxRecordId) {
+    const manager = getManagerPalette(agent.folderName);
+    if (manager) {
+      agent.palette = manager.palette;
+      agent.hueShift = manager.hueShift;
+      return;
+    }
   }
 
   const count = currentPaletteCount;

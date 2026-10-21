@@ -107,7 +107,7 @@ function App() {
   const [isHooksInfoOpen, setIsHooksInfoOpen] = useState(false);
   const [hooksTooltipDismissed, setHooksTooltipDismissed] = useState(false);
   const [isDebugMode, setIsDebugMode] = useState(false);
-  const [alwaysShowOverlay, setAlwaysShowOverlay] = useState(false);
+  const [alwaysShowOverlay, setAlwaysShowOverlay] = useState(true);
 
   const currentMajorMinor = toMajorMinor(extensionVersion);
 

@@ -89,6 +89,16 @@ export interface AgentState {
   palette?: number;
   /** Hue shift in degrees (0-360). Rotates the base palette colors. */
   hueShift?: number;
+  /** Canonical or persisted seat UID assigned to this agent. */
+  seatId?: string;
+  /** Canonical worker identifier when resolved from roster/aliases. */
+  workerId?: string;
+  /** Human-readable summary of the current/last task from ACPX User message. */
+  taskLabel?: string;
+  /** Formatted status of the last tool executed in the session. */
+  lastToolStatus?: string;
+  /** True when a known worker's latest session has finished/closed (idle at desk). */
+  isFinished?: boolean;
 }
 
 export interface PersistedAgent {

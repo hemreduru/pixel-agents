@@ -16,6 +16,10 @@ export interface AgentInfo {
   providerId?: string;
   model?: string;
   agentName?: string;
+  workerId?: string;
+  taskLabel?: string;
+  lastToolStatus?: string;
+  isFinished?: boolean;
 }
 
 export interface ExistingAgentMeta extends AgentInfo {
@@ -47,6 +51,7 @@ export interface ExistingAgentsOffice {
     folderName?: string,
     nearAgentId?: number,
     providerId?: string,
+    agentName?: string,
   ) => void;
   setHeadless: (id: number, headless: boolean) => void;
   setAgentInfo: (id: number, info: AgentInfo) => void;
@@ -71,6 +76,15 @@ export function reconcileExistingAgents(
   let addedDirectly = false;
   for (const id of incoming) {
     const m = meta[id];
+    const info: AgentInfo = {
+      providerId: m?.providerId,
+      model: m?.model,
+      agentName: m?.agentName,
+    };
+    if (m?.workerId !== undefined) info.workerId = m.workerId;
+    if (m?.taskLabel !== undefined) info.taskLabel = m.taskLabel;
+    if (m?.lastToolStatus !== undefined) info.lastToolStatus = m.lastToolStatus;
+    if (m?.isFinished !== undefined) info.isFinished = m.isFinished;
     const p: PendingAgent = {
       id,
       palette: m?.palette,
@@ -78,7 +92,7 @@ export function reconcileExistingAgents(
       seatId: m?.seatId,
       folderName: folderNames[id],
       isHeadless: headlessAgents[id] === true,
-      info: { providerId: m?.providerId, model: m?.model, agentName: m?.agentName },
+      info,
     };
     if (layoutReady) {
       if (!os.characters.has(p.id)) {
@@ -91,6 +105,7 @@ export function reconcileExistingAgents(
           p.folderName,
           undefined,
           p.info?.providerId,
+          p.info?.agentName,
         );
         if (p.isHeadless) os.setHeadless(p.id, true);
         if (p.info) os.setAgentInfo(p.id, p.info);

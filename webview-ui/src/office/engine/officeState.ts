@@ -4,6 +4,15 @@ import {
   MANAGER_FOLDER_CONFIG,
   pickDiversePalette,
 } from '../../../../core/src/paletteUtils.js';
+import type {
+  CanonicalWorkerId,
+  ResolvedWorkerIdentity,
+} from '../../../../core/src/workerIdentity.js';
+import {
+  resolveCanonicalWorkerSeats,
+  resolveWorkerIdentity,
+  sortSeatUidsDeterministically,
+} from '../../../../core/src/workerIdentity.js';
 import {
   AUTO_ON_FACING_DEPTH,
   AUTO_ON_SIDE_DEPTH,
@@ -162,20 +171,19 @@ export class OfficeState {
       seat.assigned = false;
     }
 
-    // First pass: try to keep characters at their existing seats
+    const workerSeats = this.getCanonicalWorkerSeatMap();
+
+    // First pass: keep characters at their canonical worker seat (or existing seat)
     for (const ch of this.characters.values()) {
-      if (ch.seatId && this.seats.has(ch.seatId)) {
-        const seat = this.seats.get(ch.seatId)!;
+      const identity = resolveWorkerIdentity(ch.agentName, ch.folderName);
+      const desiredSeatId =
+        identity.isKnownWorker && identity.workerId
+          ? (workerSeats.get(identity.workerId) ?? ch.seatId)
+          : ch.seatId;
+      if (desiredSeatId && this.seats.has(desiredSeatId)) {
+        const seat = this.seats.get(desiredSeatId)!;
         if (!seat.assigned) {
-          seat.assigned = true;
-          // Snap character to seat position
-          ch.tileCol = seat.seatCol;
-          ch.tileRow = seat.seatRow;
-          const cx = seat.seatCol * TILE_SIZE + TILE_SIZE / 2;
-          const cy = seat.seatRow * TILE_SIZE + TILE_SIZE / 2;
-          ch.x = cx;
-          ch.y = cy;
-          ch.dir = seat.facingDir;
+          this.snapCharacterToSeat(ch, desiredSeatId);
           continue;
         }
       }
@@ -185,16 +193,10 @@ export class OfficeState {
     // Second pass: assign remaining characters to free seats
     for (const ch of this.characters.values()) {
       if (ch.seatId) continue;
-      const seatId = this.findFreeSeat(ch.folderName, ch.providerId);
+      const identity = resolveWorkerIdentity(ch.agentName, ch.folderName);
+      const seatId = this.findFreeSeat(ch.folderName, ch.providerId, identity);
       if (seatId) {
-        this.seats.get(seatId)!.assigned = true;
-        ch.seatId = seatId;
-        const seat = this.seats.get(seatId)!;
-        ch.tileCol = seat.seatCol;
-        ch.tileRow = seat.seatRow;
-        ch.x = seat.seatCol * TILE_SIZE + TILE_SIZE / 2;
-        ch.y = seat.seatRow * TILE_SIZE + TILE_SIZE / 2;
-        ch.dir = seat.facingDir;
+        this.snapCharacterToSeat(ch, seatId);
       }
     }
 
@@ -328,8 +330,8 @@ export class OfficeState {
   }
 
   /**
-   * Random-pick a seat from a candidate list, biased toward seats that face an
-   * electronics tile. Returns null when the candidate list is empty.
+   * Deterministically pick a seat from a candidate list, biased toward seats
+   * that face an electronics tile. Returns null when the candidate list is empty.
    */
   private pickFromSeats(seatUids: string[], electronicsTiles: Set<string>): string | null {
     if (seatUids.length === 0) return null;
@@ -344,38 +346,119 @@ export class OfficeState {
         otherSeats.push(uid);
       }
     }
-    if (pcSeats.length > 0) return pcSeats[Math.floor(Math.random() * pcSeats.length)];
-    if (otherSeats.length > 0) return otherSeats[Math.floor(Math.random() * otherSeats.length)];
+    if (pcSeats.length > 0) {
+      return sortSeatUidsDeterministically(pcSeats, this.seats)[0] ?? null;
+    }
+    if (otherSeats.length > 0) {
+      return sortSeatUidsDeterministically(otherSeats, this.seats)[0] ?? null;
+    }
     return null;
   }
 
+  /** Compute the canonical worker -> seat UID map for the current layout. */
+  private getCanonicalWorkerSeatMap(
+    electronicsTiles?: Set<string>,
+  ): Map<CanonicalWorkerId, string> {
+    const tiles = electronicsTiles ?? this.buildElectronicsTileSet();
+    return resolveCanonicalWorkerSeats(
+      this.seats,
+      (uid) => this.seatZone(uid),
+      (uid) => {
+        const seat = this.seats.get(uid);
+        return seat ? this.isSeatFacingElectronics(seat, tiles) : false;
+      },
+    );
+  }
+
+  /** Immediately snap a character onto a seat and mark the seat assigned. */
+  private snapCharacterToSeat(ch: Character, seatId: string): void {
+    const seat = this.seats.get(seatId);
+    if (!seat) return;
+    seat.assigned = true;
+    ch.seatId = seatId;
+    ch.tileCol = seat.seatCol;
+    ch.tileRow = seat.seatRow;
+    ch.x = seat.seatCol * TILE_SIZE + TILE_SIZE / 2;
+    ch.y = seat.seatRow * TILE_SIZE + TILE_SIZE / 2;
+    ch.dir = seat.facingDir;
+    ch.path = [];
+    ch.moveProgress = 0;
+  }
+
   /**
-   * 3-stage seat picker for top-level agents.
+   * Deterministic seat picker for top-level agents.
    *
-   *   Stage 1: Prefer free seats whose tile is labeled with one of the agent's
-   *            Area labels, trying in order: the labels `areaMappings[folderName]`
-   *            lists, the manager folder's own Area (labeled by its folder name),
-   *            then the Area named after the agent's provider (`providerId`).
-   *   Stage 2: Prefer free seats whose tile has NO area label (unzoned).
+   *   Stage 0: Known workers (`nuri`, `cuma`, `hasan`, `kemal`, `riza`, `zeki`,
+   *            `dogan`, `selim`) always claim their canonical fixed desk. If an
+   *            unknown agent was seated there earlier, the unknown agent is
+   *            deterministically reseated to the next unreserved seat.
+   *   Stage 1: Prefer free unreserved seats whose tile is labeled with one of the
+   *            agent's Area labels (`areaMappings[folderName]`, manager folder
+   *            area, worker `homeArea`, or `providerId`).
+   *   Stage 2: Prefer free unreserved seats whose tile has NO area label (or
+   *            an unreserved PC seat when unzoned seats have no PCs).
    *   Stage 3: Any free seat.
-   *
-   * Each stage routes through `pickFromSeats` for the PC-bias rule. Returns
-   * null only when every seat is already occupied. Passing `undefined`
-   * preserves pre-Areas single-stage behavior (skips Stage 1; Stage 2 picks
-   * unzoned seats from a layout without `areaTiles`, which is every seat).
    */
-  private findFreeSeat(folderName?: string, providerId?: string): string | null {
+  private findFreeSeat(
+    folderName?: string,
+    providerId?: string,
+    workerIdentity?: ResolvedWorkerIdentity,
+  ): string | null {
     const electronicsTiles = this.buildElectronicsTileSet();
+    const workerSeats = this.getCanonicalWorkerSeatMap(electronicsTiles);
+    const reservedSeats = new Set<string>(workerSeats.values());
+
+    if (workerIdentity?.isKnownWorker && workerIdentity.workerId) {
+      const targetSeatId = workerSeats.get(workerIdentity.workerId);
+      if (targetSeatId && this.seats.has(targetSeatId)) {
+        const targetSeat = this.seats.get(targetSeatId)!;
+        if (!targetSeat.assigned) {
+          return targetSeatId;
+        }
+        // Check if an unknown (non-canonical) character is occupying this worker's desk
+        for (const occ of this.characters.values()) {
+          if (occ.seatId === targetSeatId) {
+            const occIdentity = resolveWorkerIdentity(occ.agentName, occ.folderName);
+            if (!occIdentity.isKnownWorker) {
+              // Keep targetSeat.assigned = true while finding a replacement seat for occ
+              occ.seatId = null;
+              const nextSeatId = this.findFreeSeat(occ.folderName, occ.providerId, occIdentity);
+              if (nextSeatId) {
+                this.snapCharacterToSeat(occ, nextSeatId);
+              }
+              targetSeat.assigned = false;
+              return targetSeatId;
+            }
+            break;
+          }
+        }
+      }
+    }
+
     const freeSeats: string[] = [];
     for (const [uid, seat] of this.seats) {
       if (!seat.assigned) freeSeats.push(uid);
     }
     if (freeSeats.length === 0) return null;
 
+    const pickUnreservedFirst = (candidates: string[]): string | null => {
+      if (candidates.length === 0) return null;
+      const unreserved = candidates.filter((u) => !reservedSeats.has(u));
+      if (unreserved.length > 0) {
+        return this.pickFromSeats(unreserved, electronicsTiles);
+      }
+      return this.pickFromSeats(candidates, electronicsTiles);
+    };
+
     const cleanFolder = getCleanFolderName(folderName);
+    const isManagerFolder =
+      (!workerIdentity || workerIdentity.workerId === 'nuri') &&
+      cleanFolder &&
+      MANAGER_FOLDER_CONFIG[cleanFolder];
     const labelGroups = [
       folderName ? this.areaMappings[folderName] : undefined,
-      cleanFolder && MANAGER_FOLDER_CONFIG[cleanFolder] ? [cleanFolder] : undefined,
+      isManagerFolder ? [cleanFolder] : undefined,
+      workerIdentity?.homeArea ? [workerIdentity.homeArea] : undefined,
       providerId ? [providerId] : undefined,
     ];
 
@@ -387,17 +470,36 @@ export class OfficeState {
         const label = this.seatZone(uid);
         return label !== null && wanted.has(label);
       });
-      const pick = this.pickFromSeats(inArea, electronicsTiles);
+      const pick = pickUnreservedFirst(inArea);
       if (pick) return pick;
     }
 
     // Stage 2 — unzoned seats (no area label, or layout has no areas at all).
     const unzoned = freeSeats.filter((uid) => this.seatZone(uid) === null);
-    const pick2 = this.pickFromSeats(unzoned, electronicsTiles);
+    if (electronicsTiles.size > 0) {
+      const unzonedPc = unzoned.filter((uid) => {
+        const s = this.seats.get(uid);
+        return s ? this.isSeatFacingElectronics(s, electronicsTiles) : false;
+      });
+      if (unzonedPc.length > 0) {
+        const pick2Pc = pickUnreservedFirst(unzonedPc);
+        if (pick2Pc) return pick2Pc;
+      }
+      const unreservedPc = freeSeats.filter((uid) => {
+        if (reservedSeats.has(uid)) return false;
+        const s = this.seats.get(uid);
+        return s ? this.isSeatFacingElectronics(s, electronicsTiles) : false;
+      });
+      if (unreservedPc.length > 0) {
+        const pickPc = this.pickFromSeats(unreservedPc, electronicsTiles);
+        if (pickPc) return pickPc;
+      }
+    }
+    const pick2 = pickUnreservedFirst(unzoned);
     if (pick2) return pick2;
 
     // Stage 3 — any free seat.
-    return this.pickFromSeats(freeSeats, electronicsTiles);
+    return pickUnreservedFirst(freeSeats);
   }
 
   /** Closest walkable tile to (col,row) not occupied by another character, or null. */
@@ -444,30 +546,43 @@ export class OfficeState {
     folderName?: string,
     nearAgentId?: number,
     providerId?: string,
+    agentName?: string,
   ): void {
     if (this.characters.has(id)) return;
+
+    const identity = resolveWorkerIdentity(agentName, folderName);
 
     let palette: number;
     let hueShift: number;
     if (preferredPalette !== undefined) {
       palette = preferredPalette;
       hueShift = preferredHueShift ?? 0;
+    } else if (identity.isKnownWorker && identity.palette !== undefined) {
+      palette = identity.palette;
+      hueShift = identity.hueShift ?? 0;
+    } else if (identity.rawAgentId) {
+      palette = 5;
+      hueShift = 0;
     } else {
       const pick = getManagerPalette(folderName) ?? this.pickDiversePalette();
       palette = pick.palette;
       hueShift = pick.hueShift;
     }
 
-    // Try preferred seat first, then (for teammates) the seat closest to the
-    // anchor agent, then any free seat. anchorTile resolves to the anchor's SEAT
-    // (stable from creation) rather than its live tile, so a teammate placed while
-    // the lead is still walking to its seat still clusters around the final seat.
+    // Try canonical worker seat first for known workers, else preferredSeatId (if not reserved
+    // for another worker), then (for teammates) the seat closest to the anchor agent, then findFreeSeat.
     const anchor = nearAgentId !== undefined ? this.characters.get(nearAgentId) : undefined;
     const anchorAt = anchorTile(anchor, this.seats);
+    const workerSeats = this.getCanonicalWorkerSeatMap();
+    const reservedSeats = new Set<string>(workerSeats.values());
+
     let seatId: string | null = null;
-    if (preferredSeatId && this.seats.has(preferredSeatId)) {
+    if (identity.isKnownWorker && identity.workerId && workerSeats.has(identity.workerId)) {
+      seatId = this.findFreeSeat(folderName, providerId, identity);
+    }
+    if (!seatId && preferredSeatId && this.seats.has(preferredSeatId)) {
       const seat = this.seats.get(preferredSeatId)!;
-      if (!seat.assigned) {
+      if (!seat.assigned && (!reservedSeats.has(preferredSeatId) || identity.isKnownWorker)) {
         seatId = preferredSeatId;
       }
     }
@@ -475,7 +590,7 @@ export class OfficeState {
       seatId = closestFreeSeat(this.seats, anchorAt.col, anchorAt.row);
     }
     if (!seatId) {
-      seatId = this.findFreeSeat(folderName, providerId);
+      seatId = this.findFreeSeat(folderName, providerId, identity);
     }
 
     let ch: Character;
@@ -502,6 +617,15 @@ export class OfficeState {
     if (folderName) {
       ch.folderName = folderName;
     }
+    if (providerId) {
+      ch.providerId = providerId;
+    }
+    if (identity.isKnownWorker && identity.workerId) {
+      ch.workerId = identity.workerId;
+    }
+    if (agentName && !ch.isTeamLead && ch.leadAgentId === undefined) {
+      ch.agentName = agentName;
+    }
     if (!skipSpawnEffect) {
       startMatrixEffect(ch, 'spawn');
     }
@@ -512,10 +636,38 @@ export class OfficeState {
   setAgentInfo(id: number, info: AgentInfo): void {
     const ch = this.characters.get(id);
     if (!ch) return;
-    ch.providerId = info.providerId;
-    ch.model = info.model;
+    if (info.providerId !== undefined) ch.providerId = info.providerId;
+    if (info.model !== undefined) ch.model = info.model;
+    if (info.workerId !== undefined) ch.workerId = info.workerId;
+    if (info.taskLabel !== undefined) ch.taskLabel = info.taskLabel;
+    if (info.lastToolStatus !== undefined) ch.lastToolStatus = info.lastToolStatus;
+    if (info.isFinished !== undefined) ch.isFinished = info.isFinished;
     if (info.agentName && !ch.isTeamLead && ch.leadAgentId === undefined) {
+      const prevAgentName = ch.agentName;
       ch.agentName = info.agentName;
+      const identity = resolveWorkerIdentity(info.agentName, ch.folderName);
+      if (identity.isKnownWorker && identity.workerId) {
+        ch.workerId = identity.workerId;
+        if (identity.palette !== undefined) {
+          ch.palette = identity.palette;
+          ch.hueShift = identity.hueShift ?? 0;
+        }
+        if (prevAgentName !== info.agentName) {
+          const workerSeats = this.getCanonicalWorkerSeatMap();
+          const targetSeatId = workerSeats.get(identity.workerId);
+          if (targetSeatId && ch.seatId !== targetSeatId && this.seats.has(targetSeatId)) {
+            if (ch.seatId) {
+              const oldSeat = this.seats.get(ch.seatId);
+              if (oldSeat) oldSeat.assigned = false;
+              ch.seatId = null;
+            }
+            const assignedSeatId = this.findFreeSeat(ch.folderName, ch.providerId, identity);
+            if (assignedSeatId) {
+              this.snapCharacterToSeat(ch, assignedSeatId);
+            }
+          }
+        }
+      }
     }
   }
 

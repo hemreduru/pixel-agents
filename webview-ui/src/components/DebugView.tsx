@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { getAgentNameLabel } from '../office/components/agentLabels.js';
+import { getAgentDeskDisplay, getAgentNameLabel } from '../office/components/agentLabels.js';
 import { ProviderBadge } from '../office/components/ProviderBadge.js';
 import type { OfficeState } from '../office/engine/officeState.js';
 import type { ToolActivity } from '../office/types.js';
@@ -107,6 +107,16 @@ export function DebugView({
     const diag = diagnostics[id];
     const ch = officeState.characters.get(id);
     const agentLabel = ch?.folderName ? getAgentNameLabel(ch.folderName) : undefined;
+    const deskDisplay = getAgentDeskDisplay({
+      agentName: ch?.agentName,
+      folderName: ch?.folderName,
+      providerId: ch?.providerId,
+      model: ch?.model,
+      taskLabel: ch?.taskLabel,
+      lastToolStatus: ch?.lastToolStatus,
+      isFinished: ch?.isFinished,
+      isActive: ch?.isActive,
+    });
     return (
       <div
         key={id}
@@ -118,8 +128,16 @@ export function DebugView({
             <span
               className={`rounded-none py-6 px-10 text-xl ${isSelected ? 'text-white font-bold' : ''}`}
             >
-              Agent #{id}
+              {deskDisplay.displayName}
             </span>
+            {deskDisplay.badges.map((badge) => (
+              <span
+                key={badge}
+                className="px-4 py-1 text-xs bg-bg-dark text-accent-bright border border-border leading-none"
+              >
+                {badge}
+              </span>
+            ))}
             {agentLabel && <span className="text-xs text-text-muted">({agentLabel})</span>}
             {ch?.providerId && <ProviderBadge providerId={ch.providerId} model={ch.model} />}
           </div>

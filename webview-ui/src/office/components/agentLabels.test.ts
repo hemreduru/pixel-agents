@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatModelName,
+  getAgentDeskDisplay,
   getAgentNameLabel,
   getAgentShortName,
   getAgentTitle,
@@ -108,6 +109,68 @@ describe('agentLabels', () => {
       );
       expect(getAgentShortName('antigravity', 'gemini-3.8-flash', 'demo')).toBe('Gemini 3.8 Flash');
       expect(getAgentShortName('cursor', undefined, 'demo')).toBe('Cursor');
+    });
+  });
+
+  describe('getAgentDeskDisplay', () => {
+    it('maps cuma-2 · gemini-4-argon-high to Cuma with hesap 2 badge and model label', () => {
+      const display = getAgentDeskDisplay({
+        agentName: 'cuma-2 · gemini-4-argon-high',
+        folderName: 'workspace',
+        providerId: 'antigravity',
+        model: 'gemini-4-argon-high',
+        taskLabel: 'Persistent named desks',
+        activeToolStatus: 'Running command',
+        isActive: true,
+      });
+      expect(display.displayName).toBe('Cuma');
+      expect(display.badges).toEqual(['hesap 2']);
+      expect(display.modelLabel).toBe('Antigravity · Gemini 4 Argon High');
+      expect(display.taskText).toBe('Persistent named desks');
+      expect(display.activityText).toBe('Running command');
+      expect(display.tooltip).toContain('Cuma');
+      expect(display.tooltip).toContain('hesap 2');
+      expect(display.tooltip).toContain('Gemini 4 Argon High');
+    });
+
+    it('maps selim-yedek · agy-sonnet when finished/idle to Selim with yedek badge and Idle · last job', () => {
+      const display = getAgentDeskDisplay({
+        agentName: 'selim-yedek · agy-sonnet',
+        folderName: 'workspace',
+        providerId: 'claude',
+        model: 'agy-sonnet',
+        taskLabel: 'Fix auth bug',
+        lastToolStatus: 'Editing auth.ts',
+        isFinished: true,
+        isActive: false,
+      });
+      expect(display.displayName).toBe('Selim');
+      expect(display.badges).toEqual(['yedek']);
+      expect(display.taskText).toBe('Fix auth bug');
+      expect(display.activityText).toBe('Idle · Editing auth.ts');
+    });
+
+    it('maps cuma-yedek-2 to Cuma with both yedek and hesap 2 badges', () => {
+      const display = getAgentDeskDisplay({
+        agentName: 'cuma-yedek-2 · gemini-4-argon-high',
+        providerId: 'antigravity',
+        model: 'gemini-4-argon-high',
+      });
+      expect(display.displayName).toBe('Cuma');
+      expect(display.badges).toEqual(['yedek', 'hesap 2']);
+    });
+
+    it('maps unknown or synthetic agent labels to Unknown without leaking Agent N or raw session IDs', () => {
+      for (const raw of ['unknown · gpt-4o', 'Agent 3', 'agent:unknown:acp:123:oneshot:456']) {
+        const display = getAgentDeskDisplay({
+          agentName: raw,
+          folderName: 'workspace',
+          providerId: 'antigravity',
+          model: 'gemini-4-argon-high',
+        });
+        expect(display.displayName).toBe('Unknown');
+        expect(display.displayName).not.toMatch(/Agent \d+/i);
+      }
     });
   });
 });

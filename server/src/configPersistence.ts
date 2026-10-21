@@ -58,7 +58,7 @@ export interface PixelAgentsConfig {
 const DEFAULT_ADAPTER_SETTINGS: AdapterSettings = {
   soundEnabled: true,
   lastSeenVersion: '',
-  alwaysShowLabels: false,
+  alwaysShowLabels: true,
   ghostHeadlessAgents: false,
   watchAllSessions: false,
   hooksInfoShown: false,

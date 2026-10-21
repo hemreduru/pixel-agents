@@ -278,6 +278,8 @@ export function installTestHooks(officeStateRef: { current: OfficeState | null }
     skipSpawnEffect,
     folderName,
     nearAgentId,
+    providerId,
+    agentName,
   ) {
     origAddAgent.call(
       this,
@@ -288,6 +290,8 @@ export function installTestHooks(officeStateRef: { current: OfficeState | null }
       skipSpawnEffect,
       folderName,
       nearAgentId,
+      providerId,
+      agentName,
     );
     const ch = this.characters.get(id);
     hooks.addAgentLog?.push({
